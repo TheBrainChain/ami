@@ -293,7 +293,7 @@ export default class LoadersVolumes extends LoadersBase {
       case 'DICOM':
       case 'IMA':
       case '':
-        Parser = ParsersDicom;
+        Parser = ParsersNifti;
         break;
       case 'MHD':
         Parser = ParsersMhd;

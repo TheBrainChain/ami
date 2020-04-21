@@ -5228,7 +5228,7 @@ if (true)
   module.exports = OpenJPEG;
 else {}
 
-/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../../process/browser.js */ "./node_modules/process/browser.js"), __webpack_require__(/*! ./../../buffer/index.js */ "./node_modules/buffer/index.js").Buffer))
+/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../../process/browser.js */ "./node_modules/process/browser.js"), __webpack_require__(/*! ./../../node-libs-browser/node_modules/buffer/index.js */ "./node_modules/node-libs-browser/node_modules/buffer/index.js").Buffer))
 
 /***/ }),
 
@@ -5241,6 +5241,8 @@ else {}
 
 "use strict";
 /* WEBPACK VAR INJECTION */(function(global) {
+
+var objectAssign = __webpack_require__(/*! object-assign */ "./node_modules/object-assign/index.js");
 
 // compare and isBuffer taken from https://github.com/feross/buffer/blob/680e9e5e488f22aac27599a57dc844a6315928dd/index.js
 // original notice:
@@ -5283,6 +5285,8 @@ function isBuffer(b) {
 }
 
 // based on node assert, original notice:
+// NB: The URL to the CommonJS spec is kept just for tradition.
+//     node-assert has evolved a lot since then, both in API and behavior.
 
 // http://wiki.commonjs.org/wiki/Unit_Testing/1.0
 //
@@ -5308,7 +5312,7 @@ function isBuffer(b) {
 // ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-var util = __webpack_require__(/*! util/ */ "./node_modules/util/util.js");
+var util = __webpack_require__(/*! util/ */ "./node_modules/node-libs-browser/node_modules/util/util.js");
 var hasOwn = Object.prototype.hasOwnProperty;
 var pSlice = Array.prototype.slice;
 var functionsHaveNames = (function () {
@@ -5723,6 +5727,18 @@ assert.doesNotThrow = function(block, /*optional*/error, /*optional*/message) {
 
 assert.ifError = function(err) { if (err) throw err; };
 
+// Expose a strict only variant of assert
+function strict(value, message) {
+  if (!value) fail(value, true, message, '==', strict);
+}
+assert.strict = objectAssign(strict, assert, {
+  equal: assert.strictEqual,
+  deepEqual: assert.deepStrictEqual,
+  notEqual: assert.notStrictEqual,
+  notDeepEqual: assert.notDeepStrictEqual
+});
+assert.strict.strict = assert.strict;
+
 var objectKeys = Object.keys || function (obj) {
   var keys = [];
   for (var key in obj) {
@@ -5810,7 +5826,8 @@ function toByteArray (b64) {
     ? validLen - 4
     : validLen
 
-  for (var i = 0; i < len; i += 4) {
+  var i
+  for (i = 0; i < len; i += 4) {
     tmp =
       (revLookup[b64.charCodeAt(i)] << 18) |
       (revLookup[b64.charCodeAt(i + 1)] << 12) |
@@ -5898,1808 +5915,6 @@ function fromByteArray (uint8) {
 
 /***/ }),
 
-/***/ "./node_modules/buffer/index.js":
-/*!**************************************!*\
-  !*** ./node_modules/buffer/index.js ***!
-  \**************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-/* WEBPACK VAR INJECTION */(function(global) {/*!
- * The buffer module from node.js, for the browser.
- *
- * @author   Feross Aboukhadijeh <feross@feross.org> <http://feross.org>
- * @license  MIT
- */
-/* eslint-disable no-proto */
-
-
-
-var base64 = __webpack_require__(/*! base64-js */ "./node_modules/base64-js/index.js")
-var ieee754 = __webpack_require__(/*! ieee754 */ "./node_modules/ieee754/index.js")
-var isArray = __webpack_require__(/*! isarray */ "./node_modules/isarray/index.js")
-
-exports.Buffer = Buffer
-exports.SlowBuffer = SlowBuffer
-exports.INSPECT_MAX_BYTES = 50
-
-/**
- * If `Buffer.TYPED_ARRAY_SUPPORT`:
- *   === true    Use Uint8Array implementation (fastest)
- *   === false   Use Object implementation (most compatible, even IE6)
- *
- * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
- * Opera 11.6+, iOS 4.2+.
- *
- * Due to various browser bugs, sometimes the Object implementation will be used even
- * when the browser supports typed arrays.
- *
- * Note:
- *
- *   - Firefox 4-29 lacks support for adding new properties to `Uint8Array` instances,
- *     See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
- *
- *   - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
- *
- *   - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
- *     incorrect length in some situations.
-
- * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they
- * get the Object implementation, which is slower but behaves correctly.
- */
-Buffer.TYPED_ARRAY_SUPPORT = global.TYPED_ARRAY_SUPPORT !== undefined
-  ? global.TYPED_ARRAY_SUPPORT
-  : typedArraySupport()
-
-/*
- * Export kMaxLength after typed array support is determined.
- */
-exports.kMaxLength = kMaxLength()
-
-function typedArraySupport () {
-  try {
-    var arr = new Uint8Array(1)
-    arr.__proto__ = {__proto__: Uint8Array.prototype, foo: function () { return 42 }}
-    return arr.foo() === 42 && // typed array instances can be augmented
-        typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
-        arr.subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
-  } catch (e) {
-    return false
-  }
-}
-
-function kMaxLength () {
-  return Buffer.TYPED_ARRAY_SUPPORT
-    ? 0x7fffffff
-    : 0x3fffffff
-}
-
-function createBuffer (that, length) {
-  if (kMaxLength() < length) {
-    throw new RangeError('Invalid typed array length')
-  }
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    // Return an augmented `Uint8Array` instance, for best performance
-    that = new Uint8Array(length)
-    that.__proto__ = Buffer.prototype
-  } else {
-    // Fallback: Return an object instance of the Buffer class
-    if (that === null) {
-      that = new Buffer(length)
-    }
-    that.length = length
-  }
-
-  return that
-}
-
-/**
- * The Buffer constructor returns instances of `Uint8Array` that have their
- * prototype changed to `Buffer.prototype`. Furthermore, `Buffer` is a subclass of
- * `Uint8Array`, so the returned instances will have all the node `Buffer` methods
- * and the `Uint8Array` methods. Square bracket notation works as expected -- it
- * returns a single octet.
- *
- * The `Uint8Array` prototype remains unmodified.
- */
-
-function Buffer (arg, encodingOrOffset, length) {
-  if (!Buffer.TYPED_ARRAY_SUPPORT && !(this instanceof Buffer)) {
-    return new Buffer(arg, encodingOrOffset, length)
-  }
-
-  // Common case.
-  if (typeof arg === 'number') {
-    if (typeof encodingOrOffset === 'string') {
-      throw new Error(
-        'If encoding is specified then the first argument must be a string'
-      )
-    }
-    return allocUnsafe(this, arg)
-  }
-  return from(this, arg, encodingOrOffset, length)
-}
-
-Buffer.poolSize = 8192 // not used by this implementation
-
-// TODO: Legacy, not needed anymore. Remove in next major version.
-Buffer._augment = function (arr) {
-  arr.__proto__ = Buffer.prototype
-  return arr
-}
-
-function from (that, value, encodingOrOffset, length) {
-  if (typeof value === 'number') {
-    throw new TypeError('"value" argument must not be a number')
-  }
-
-  if (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer) {
-    return fromArrayBuffer(that, value, encodingOrOffset, length)
-  }
-
-  if (typeof value === 'string') {
-    return fromString(that, value, encodingOrOffset)
-  }
-
-  return fromObject(that, value)
-}
-
-/**
- * Functionally equivalent to Buffer(arg, encoding) but throws a TypeError
- * if value is a number.
- * Buffer.from(str[, encoding])
- * Buffer.from(array)
- * Buffer.from(buffer)
- * Buffer.from(arrayBuffer[, byteOffset[, length]])
- **/
-Buffer.from = function (value, encodingOrOffset, length) {
-  return from(null, value, encodingOrOffset, length)
-}
-
-if (Buffer.TYPED_ARRAY_SUPPORT) {
-  Buffer.prototype.__proto__ = Uint8Array.prototype
-  Buffer.__proto__ = Uint8Array
-  if (typeof Symbol !== 'undefined' && Symbol.species &&
-      Buffer[Symbol.species] === Buffer) {
-    // Fix subarray() in ES2016. See: https://github.com/feross/buffer/pull/97
-    Object.defineProperty(Buffer, Symbol.species, {
-      value: null,
-      configurable: true
-    })
-  }
-}
-
-function assertSize (size) {
-  if (typeof size !== 'number') {
-    throw new TypeError('"size" argument must be a number')
-  } else if (size < 0) {
-    throw new RangeError('"size" argument must not be negative')
-  }
-}
-
-function alloc (that, size, fill, encoding) {
-  assertSize(size)
-  if (size <= 0) {
-    return createBuffer(that, size)
-  }
-  if (fill !== undefined) {
-    // Only pay attention to encoding if it's a string. This
-    // prevents accidentally sending in a number that would
-    // be interpretted as a start offset.
-    return typeof encoding === 'string'
-      ? createBuffer(that, size).fill(fill, encoding)
-      : createBuffer(that, size).fill(fill)
-  }
-  return createBuffer(that, size)
-}
-
-/**
- * Creates a new filled Buffer instance.
- * alloc(size[, fill[, encoding]])
- **/
-Buffer.alloc = function (size, fill, encoding) {
-  return alloc(null, size, fill, encoding)
-}
-
-function allocUnsafe (that, size) {
-  assertSize(size)
-  that = createBuffer(that, size < 0 ? 0 : checked(size) | 0)
-  if (!Buffer.TYPED_ARRAY_SUPPORT) {
-    for (var i = 0; i < size; ++i) {
-      that[i] = 0
-    }
-  }
-  return that
-}
-
-/**
- * Equivalent to Buffer(num), by default creates a non-zero-filled Buffer instance.
- * */
-Buffer.allocUnsafe = function (size) {
-  return allocUnsafe(null, size)
-}
-/**
- * Equivalent to SlowBuffer(num), by default creates a non-zero-filled Buffer instance.
- */
-Buffer.allocUnsafeSlow = function (size) {
-  return allocUnsafe(null, size)
-}
-
-function fromString (that, string, encoding) {
-  if (typeof encoding !== 'string' || encoding === '') {
-    encoding = 'utf8'
-  }
-
-  if (!Buffer.isEncoding(encoding)) {
-    throw new TypeError('"encoding" must be a valid string encoding')
-  }
-
-  var length = byteLength(string, encoding) | 0
-  that = createBuffer(that, length)
-
-  var actual = that.write(string, encoding)
-
-  if (actual !== length) {
-    // Writing a hex string, for example, that contains invalid characters will
-    // cause everything after the first invalid character to be ignored. (e.g.
-    // 'abxxcd' will be treated as 'ab')
-    that = that.slice(0, actual)
-  }
-
-  return that
-}
-
-function fromArrayLike (that, array) {
-  var length = array.length < 0 ? 0 : checked(array.length) | 0
-  that = createBuffer(that, length)
-  for (var i = 0; i < length; i += 1) {
-    that[i] = array[i] & 255
-  }
-  return that
-}
-
-function fromArrayBuffer (that, array, byteOffset, length) {
-  array.byteLength // this throws if `array` is not a valid ArrayBuffer
-
-  if (byteOffset < 0 || array.byteLength < byteOffset) {
-    throw new RangeError('\'offset\' is out of bounds')
-  }
-
-  if (array.byteLength < byteOffset + (length || 0)) {
-    throw new RangeError('\'length\' is out of bounds')
-  }
-
-  if (byteOffset === undefined && length === undefined) {
-    array = new Uint8Array(array)
-  } else if (length === undefined) {
-    array = new Uint8Array(array, byteOffset)
-  } else {
-    array = new Uint8Array(array, byteOffset, length)
-  }
-
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    // Return an augmented `Uint8Array` instance, for best performance
-    that = array
-    that.__proto__ = Buffer.prototype
-  } else {
-    // Fallback: Return an object instance of the Buffer class
-    that = fromArrayLike(that, array)
-  }
-  return that
-}
-
-function fromObject (that, obj) {
-  if (Buffer.isBuffer(obj)) {
-    var len = checked(obj.length) | 0
-    that = createBuffer(that, len)
-
-    if (that.length === 0) {
-      return that
-    }
-
-    obj.copy(that, 0, 0, len)
-    return that
-  }
-
-  if (obj) {
-    if ((typeof ArrayBuffer !== 'undefined' &&
-        obj.buffer instanceof ArrayBuffer) || 'length' in obj) {
-      if (typeof obj.length !== 'number' || isnan(obj.length)) {
-        return createBuffer(that, 0)
-      }
-      return fromArrayLike(that, obj)
-    }
-
-    if (obj.type === 'Buffer' && isArray(obj.data)) {
-      return fromArrayLike(that, obj.data)
-    }
-  }
-
-  throw new TypeError('First argument must be a string, Buffer, ArrayBuffer, Array, or array-like object.')
-}
-
-function checked (length) {
-  // Note: cannot use `length < kMaxLength()` here because that fails when
-  // length is NaN (which is otherwise coerced to zero.)
-  if (length >= kMaxLength()) {
-    throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
-                         'size: 0x' + kMaxLength().toString(16) + ' bytes')
-  }
-  return length | 0
-}
-
-function SlowBuffer (length) {
-  if (+length != length) { // eslint-disable-line eqeqeq
-    length = 0
-  }
-  return Buffer.alloc(+length)
-}
-
-Buffer.isBuffer = function isBuffer (b) {
-  return !!(b != null && b._isBuffer)
-}
-
-Buffer.compare = function compare (a, b) {
-  if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b)) {
-    throw new TypeError('Arguments must be Buffers')
-  }
-
-  if (a === b) return 0
-
-  var x = a.length
-  var y = b.length
-
-  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
-    if (a[i] !== b[i]) {
-      x = a[i]
-      y = b[i]
-      break
-    }
-  }
-
-  if (x < y) return -1
-  if (y < x) return 1
-  return 0
-}
-
-Buffer.isEncoding = function isEncoding (encoding) {
-  switch (String(encoding).toLowerCase()) {
-    case 'hex':
-    case 'utf8':
-    case 'utf-8':
-    case 'ascii':
-    case 'latin1':
-    case 'binary':
-    case 'base64':
-    case 'ucs2':
-    case 'ucs-2':
-    case 'utf16le':
-    case 'utf-16le':
-      return true
-    default:
-      return false
-  }
-}
-
-Buffer.concat = function concat (list, length) {
-  if (!isArray(list)) {
-    throw new TypeError('"list" argument must be an Array of Buffers')
-  }
-
-  if (list.length === 0) {
-    return Buffer.alloc(0)
-  }
-
-  var i
-  if (length === undefined) {
-    length = 0
-    for (i = 0; i < list.length; ++i) {
-      length += list[i].length
-    }
-  }
-
-  var buffer = Buffer.allocUnsafe(length)
-  var pos = 0
-  for (i = 0; i < list.length; ++i) {
-    var buf = list[i]
-    if (!Buffer.isBuffer(buf)) {
-      throw new TypeError('"list" argument must be an Array of Buffers')
-    }
-    buf.copy(buffer, pos)
-    pos += buf.length
-  }
-  return buffer
-}
-
-function byteLength (string, encoding) {
-  if (Buffer.isBuffer(string)) {
-    return string.length
-  }
-  if (typeof ArrayBuffer !== 'undefined' && typeof ArrayBuffer.isView === 'function' &&
-      (ArrayBuffer.isView(string) || string instanceof ArrayBuffer)) {
-    return string.byteLength
-  }
-  if (typeof string !== 'string') {
-    string = '' + string
-  }
-
-  var len = string.length
-  if (len === 0) return 0
-
-  // Use a for loop to avoid recursion
-  var loweredCase = false
-  for (;;) {
-    switch (encoding) {
-      case 'ascii':
-      case 'latin1':
-      case 'binary':
-        return len
-      case 'utf8':
-      case 'utf-8':
-      case undefined:
-        return utf8ToBytes(string).length
-      case 'ucs2':
-      case 'ucs-2':
-      case 'utf16le':
-      case 'utf-16le':
-        return len * 2
-      case 'hex':
-        return len >>> 1
-      case 'base64':
-        return base64ToBytes(string).length
-      default:
-        if (loweredCase) return utf8ToBytes(string).length // assume utf8
-        encoding = ('' + encoding).toLowerCase()
-        loweredCase = true
-    }
-  }
-}
-Buffer.byteLength = byteLength
-
-function slowToString (encoding, start, end) {
-  var loweredCase = false
-
-  // No need to verify that "this.length <= MAX_UINT32" since it's a read-only
-  // property of a typed array.
-
-  // This behaves neither like String nor Uint8Array in that we set start/end
-  // to their upper/lower bounds if the value passed is out of range.
-  // undefined is handled specially as per ECMA-262 6th Edition,
-  // Section 13.3.3.7 Runtime Semantics: KeyedBindingInitialization.
-  if (start === undefined || start < 0) {
-    start = 0
-  }
-  // Return early if start > this.length. Done here to prevent potential uint32
-  // coercion fail below.
-  if (start > this.length) {
-    return ''
-  }
-
-  if (end === undefined || end > this.length) {
-    end = this.length
-  }
-
-  if (end <= 0) {
-    return ''
-  }
-
-  // Force coersion to uint32. This will also coerce falsey/NaN values to 0.
-  end >>>= 0
-  start >>>= 0
-
-  if (end <= start) {
-    return ''
-  }
-
-  if (!encoding) encoding = 'utf8'
-
-  while (true) {
-    switch (encoding) {
-      case 'hex':
-        return hexSlice(this, start, end)
-
-      case 'utf8':
-      case 'utf-8':
-        return utf8Slice(this, start, end)
-
-      case 'ascii':
-        return asciiSlice(this, start, end)
-
-      case 'latin1':
-      case 'binary':
-        return latin1Slice(this, start, end)
-
-      case 'base64':
-        return base64Slice(this, start, end)
-
-      case 'ucs2':
-      case 'ucs-2':
-      case 'utf16le':
-      case 'utf-16le':
-        return utf16leSlice(this, start, end)
-
-      default:
-        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
-        encoding = (encoding + '').toLowerCase()
-        loweredCase = true
-    }
-  }
-}
-
-// The property is used by `Buffer.isBuffer` and `is-buffer` (in Safari 5-7) to detect
-// Buffer instances.
-Buffer.prototype._isBuffer = true
-
-function swap (b, n, m) {
-  var i = b[n]
-  b[n] = b[m]
-  b[m] = i
-}
-
-Buffer.prototype.swap16 = function swap16 () {
-  var len = this.length
-  if (len % 2 !== 0) {
-    throw new RangeError('Buffer size must be a multiple of 16-bits')
-  }
-  for (var i = 0; i < len; i += 2) {
-    swap(this, i, i + 1)
-  }
-  return this
-}
-
-Buffer.prototype.swap32 = function swap32 () {
-  var len = this.length
-  if (len % 4 !== 0) {
-    throw new RangeError('Buffer size must be a multiple of 32-bits')
-  }
-  for (var i = 0; i < len; i += 4) {
-    swap(this, i, i + 3)
-    swap(this, i + 1, i + 2)
-  }
-  return this
-}
-
-Buffer.prototype.swap64 = function swap64 () {
-  var len = this.length
-  if (len % 8 !== 0) {
-    throw new RangeError('Buffer size must be a multiple of 64-bits')
-  }
-  for (var i = 0; i < len; i += 8) {
-    swap(this, i, i + 7)
-    swap(this, i + 1, i + 6)
-    swap(this, i + 2, i + 5)
-    swap(this, i + 3, i + 4)
-  }
-  return this
-}
-
-Buffer.prototype.toString = function toString () {
-  var length = this.length | 0
-  if (length === 0) return ''
-  if (arguments.length === 0) return utf8Slice(this, 0, length)
-  return slowToString.apply(this, arguments)
-}
-
-Buffer.prototype.equals = function equals (b) {
-  if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
-  if (this === b) return true
-  return Buffer.compare(this, b) === 0
-}
-
-Buffer.prototype.inspect = function inspect () {
-  var str = ''
-  var max = exports.INSPECT_MAX_BYTES
-  if (this.length > 0) {
-    str = this.toString('hex', 0, max).match(/.{2}/g).join(' ')
-    if (this.length > max) str += ' ... '
-  }
-  return '<Buffer ' + str + '>'
-}
-
-Buffer.prototype.compare = function compare (target, start, end, thisStart, thisEnd) {
-  if (!Buffer.isBuffer(target)) {
-    throw new TypeError('Argument must be a Buffer')
-  }
-
-  if (start === undefined) {
-    start = 0
-  }
-  if (end === undefined) {
-    end = target ? target.length : 0
-  }
-  if (thisStart === undefined) {
-    thisStart = 0
-  }
-  if (thisEnd === undefined) {
-    thisEnd = this.length
-  }
-
-  if (start < 0 || end > target.length || thisStart < 0 || thisEnd > this.length) {
-    throw new RangeError('out of range index')
-  }
-
-  if (thisStart >= thisEnd && start >= end) {
-    return 0
-  }
-  if (thisStart >= thisEnd) {
-    return -1
-  }
-  if (start >= end) {
-    return 1
-  }
-
-  start >>>= 0
-  end >>>= 0
-  thisStart >>>= 0
-  thisEnd >>>= 0
-
-  if (this === target) return 0
-
-  var x = thisEnd - thisStart
-  var y = end - start
-  var len = Math.min(x, y)
-
-  var thisCopy = this.slice(thisStart, thisEnd)
-  var targetCopy = target.slice(start, end)
-
-  for (var i = 0; i < len; ++i) {
-    if (thisCopy[i] !== targetCopy[i]) {
-      x = thisCopy[i]
-      y = targetCopy[i]
-      break
-    }
-  }
-
-  if (x < y) return -1
-  if (y < x) return 1
-  return 0
-}
-
-// Finds either the first index of `val` in `buffer` at offset >= `byteOffset`,
-// OR the last index of `val` in `buffer` at offset <= `byteOffset`.
-//
-// Arguments:
-// - buffer - a Buffer to search
-// - val - a string, Buffer, or number
-// - byteOffset - an index into `buffer`; will be clamped to an int32
-// - encoding - an optional encoding, relevant is val is a string
-// - dir - true for indexOf, false for lastIndexOf
-function bidirectionalIndexOf (buffer, val, byteOffset, encoding, dir) {
-  // Empty buffer means no match
-  if (buffer.length === 0) return -1
-
-  // Normalize byteOffset
-  if (typeof byteOffset === 'string') {
-    encoding = byteOffset
-    byteOffset = 0
-  } else if (byteOffset > 0x7fffffff) {
-    byteOffset = 0x7fffffff
-  } else if (byteOffset < -0x80000000) {
-    byteOffset = -0x80000000
-  }
-  byteOffset = +byteOffset  // Coerce to Number.
-  if (isNaN(byteOffset)) {
-    // byteOffset: it it's undefined, null, NaN, "foo", etc, search whole buffer
-    byteOffset = dir ? 0 : (buffer.length - 1)
-  }
-
-  // Normalize byteOffset: negative offsets start from the end of the buffer
-  if (byteOffset < 0) byteOffset = buffer.length + byteOffset
-  if (byteOffset >= buffer.length) {
-    if (dir) return -1
-    else byteOffset = buffer.length - 1
-  } else if (byteOffset < 0) {
-    if (dir) byteOffset = 0
-    else return -1
-  }
-
-  // Normalize val
-  if (typeof val === 'string') {
-    val = Buffer.from(val, encoding)
-  }
-
-  // Finally, search either indexOf (if dir is true) or lastIndexOf
-  if (Buffer.isBuffer(val)) {
-    // Special case: looking for empty string/buffer always fails
-    if (val.length === 0) {
-      return -1
-    }
-    return arrayIndexOf(buffer, val, byteOffset, encoding, dir)
-  } else if (typeof val === 'number') {
-    val = val & 0xFF // Search for a byte value [0-255]
-    if (Buffer.TYPED_ARRAY_SUPPORT &&
-        typeof Uint8Array.prototype.indexOf === 'function') {
-      if (dir) {
-        return Uint8Array.prototype.indexOf.call(buffer, val, byteOffset)
-      } else {
-        return Uint8Array.prototype.lastIndexOf.call(buffer, val, byteOffset)
-      }
-    }
-    return arrayIndexOf(buffer, [ val ], byteOffset, encoding, dir)
-  }
-
-  throw new TypeError('val must be string, number or Buffer')
-}
-
-function arrayIndexOf (arr, val, byteOffset, encoding, dir) {
-  var indexSize = 1
-  var arrLength = arr.length
-  var valLength = val.length
-
-  if (encoding !== undefined) {
-    encoding = String(encoding).toLowerCase()
-    if (encoding === 'ucs2' || encoding === 'ucs-2' ||
-        encoding === 'utf16le' || encoding === 'utf-16le') {
-      if (arr.length < 2 || val.length < 2) {
-        return -1
-      }
-      indexSize = 2
-      arrLength /= 2
-      valLength /= 2
-      byteOffset /= 2
-    }
-  }
-
-  function read (buf, i) {
-    if (indexSize === 1) {
-      return buf[i]
-    } else {
-      return buf.readUInt16BE(i * indexSize)
-    }
-  }
-
-  var i
-  if (dir) {
-    var foundIndex = -1
-    for (i = byteOffset; i < arrLength; i++) {
-      if (read(arr, i) === read(val, foundIndex === -1 ? 0 : i - foundIndex)) {
-        if (foundIndex === -1) foundIndex = i
-        if (i - foundIndex + 1 === valLength) return foundIndex * indexSize
-      } else {
-        if (foundIndex !== -1) i -= i - foundIndex
-        foundIndex = -1
-      }
-    }
-  } else {
-    if (byteOffset + valLength > arrLength) byteOffset = arrLength - valLength
-    for (i = byteOffset; i >= 0; i--) {
-      var found = true
-      for (var j = 0; j < valLength; j++) {
-        if (read(arr, i + j) !== read(val, j)) {
-          found = false
-          break
-        }
-      }
-      if (found) return i
-    }
-  }
-
-  return -1
-}
-
-Buffer.prototype.includes = function includes (val, byteOffset, encoding) {
-  return this.indexOf(val, byteOffset, encoding) !== -1
-}
-
-Buffer.prototype.indexOf = function indexOf (val, byteOffset, encoding) {
-  return bidirectionalIndexOf(this, val, byteOffset, encoding, true)
-}
-
-Buffer.prototype.lastIndexOf = function lastIndexOf (val, byteOffset, encoding) {
-  return bidirectionalIndexOf(this, val, byteOffset, encoding, false)
-}
-
-function hexWrite (buf, string, offset, length) {
-  offset = Number(offset) || 0
-  var remaining = buf.length - offset
-  if (!length) {
-    length = remaining
-  } else {
-    length = Number(length)
-    if (length > remaining) {
-      length = remaining
-    }
-  }
-
-  // must be an even number of digits
-  var strLen = string.length
-  if (strLen % 2 !== 0) throw new TypeError('Invalid hex string')
-
-  if (length > strLen / 2) {
-    length = strLen / 2
-  }
-  for (var i = 0; i < length; ++i) {
-    var parsed = parseInt(string.substr(i * 2, 2), 16)
-    if (isNaN(parsed)) return i
-    buf[offset + i] = parsed
-  }
-  return i
-}
-
-function utf8Write (buf, string, offset, length) {
-  return blitBuffer(utf8ToBytes(string, buf.length - offset), buf, offset, length)
-}
-
-function asciiWrite (buf, string, offset, length) {
-  return blitBuffer(asciiToBytes(string), buf, offset, length)
-}
-
-function latin1Write (buf, string, offset, length) {
-  return asciiWrite(buf, string, offset, length)
-}
-
-function base64Write (buf, string, offset, length) {
-  return blitBuffer(base64ToBytes(string), buf, offset, length)
-}
-
-function ucs2Write (buf, string, offset, length) {
-  return blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length)
-}
-
-Buffer.prototype.write = function write (string, offset, length, encoding) {
-  // Buffer#write(string)
-  if (offset === undefined) {
-    encoding = 'utf8'
-    length = this.length
-    offset = 0
-  // Buffer#write(string, encoding)
-  } else if (length === undefined && typeof offset === 'string') {
-    encoding = offset
-    length = this.length
-    offset = 0
-  // Buffer#write(string, offset[, length][, encoding])
-  } else if (isFinite(offset)) {
-    offset = offset | 0
-    if (isFinite(length)) {
-      length = length | 0
-      if (encoding === undefined) encoding = 'utf8'
-    } else {
-      encoding = length
-      length = undefined
-    }
-  // legacy write(string, encoding, offset, length) - remove in v0.13
-  } else {
-    throw new Error(
-      'Buffer.write(string, encoding, offset[, length]) is no longer supported'
-    )
-  }
-
-  var remaining = this.length - offset
-  if (length === undefined || length > remaining) length = remaining
-
-  if ((string.length > 0 && (length < 0 || offset < 0)) || offset > this.length) {
-    throw new RangeError('Attempt to write outside buffer bounds')
-  }
-
-  if (!encoding) encoding = 'utf8'
-
-  var loweredCase = false
-  for (;;) {
-    switch (encoding) {
-      case 'hex':
-        return hexWrite(this, string, offset, length)
-
-      case 'utf8':
-      case 'utf-8':
-        return utf8Write(this, string, offset, length)
-
-      case 'ascii':
-        return asciiWrite(this, string, offset, length)
-
-      case 'latin1':
-      case 'binary':
-        return latin1Write(this, string, offset, length)
-
-      case 'base64':
-        // Warning: maxLength not taken into account in base64Write
-        return base64Write(this, string, offset, length)
-
-      case 'ucs2':
-      case 'ucs-2':
-      case 'utf16le':
-      case 'utf-16le':
-        return ucs2Write(this, string, offset, length)
-
-      default:
-        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
-        encoding = ('' + encoding).toLowerCase()
-        loweredCase = true
-    }
-  }
-}
-
-Buffer.prototype.toJSON = function toJSON () {
-  return {
-    type: 'Buffer',
-    data: Array.prototype.slice.call(this._arr || this, 0)
-  }
-}
-
-function base64Slice (buf, start, end) {
-  if (start === 0 && end === buf.length) {
-    return base64.fromByteArray(buf)
-  } else {
-    return base64.fromByteArray(buf.slice(start, end))
-  }
-}
-
-function utf8Slice (buf, start, end) {
-  end = Math.min(buf.length, end)
-  var res = []
-
-  var i = start
-  while (i < end) {
-    var firstByte = buf[i]
-    var codePoint = null
-    var bytesPerSequence = (firstByte > 0xEF) ? 4
-      : (firstByte > 0xDF) ? 3
-      : (firstByte > 0xBF) ? 2
-      : 1
-
-    if (i + bytesPerSequence <= end) {
-      var secondByte, thirdByte, fourthByte, tempCodePoint
-
-      switch (bytesPerSequence) {
-        case 1:
-          if (firstByte < 0x80) {
-            codePoint = firstByte
-          }
-          break
-        case 2:
-          secondByte = buf[i + 1]
-          if ((secondByte & 0xC0) === 0x80) {
-            tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F)
-            if (tempCodePoint > 0x7F) {
-              codePoint = tempCodePoint
-            }
-          }
-          break
-        case 3:
-          secondByte = buf[i + 1]
-          thirdByte = buf[i + 2]
-          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
-            tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F)
-            if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
-              codePoint = tempCodePoint
-            }
-          }
-          break
-        case 4:
-          secondByte = buf[i + 1]
-          thirdByte = buf[i + 2]
-          fourthByte = buf[i + 3]
-          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
-            tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F)
-            if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
-              codePoint = tempCodePoint
-            }
-          }
-      }
-    }
-
-    if (codePoint === null) {
-      // we did not generate a valid codePoint so insert a
-      // replacement char (U+FFFD) and advance only 1 byte
-      codePoint = 0xFFFD
-      bytesPerSequence = 1
-    } else if (codePoint > 0xFFFF) {
-      // encode to utf16 (surrogate pair dance)
-      codePoint -= 0x10000
-      res.push(codePoint >>> 10 & 0x3FF | 0xD800)
-      codePoint = 0xDC00 | codePoint & 0x3FF
-    }
-
-    res.push(codePoint)
-    i += bytesPerSequence
-  }
-
-  return decodeCodePointsArray(res)
-}
-
-// Based on http://stackoverflow.com/a/22747272/680742, the browser with
-// the lowest limit is Chrome, with 0x10000 args.
-// We go 1 magnitude less, for safety
-var MAX_ARGUMENTS_LENGTH = 0x1000
-
-function decodeCodePointsArray (codePoints) {
-  var len = codePoints.length
-  if (len <= MAX_ARGUMENTS_LENGTH) {
-    return String.fromCharCode.apply(String, codePoints) // avoid extra slice()
-  }
-
-  // Decode in chunks to avoid "call stack size exceeded".
-  var res = ''
-  var i = 0
-  while (i < len) {
-    res += String.fromCharCode.apply(
-      String,
-      codePoints.slice(i, i += MAX_ARGUMENTS_LENGTH)
-    )
-  }
-  return res
-}
-
-function asciiSlice (buf, start, end) {
-  var ret = ''
-  end = Math.min(buf.length, end)
-
-  for (var i = start; i < end; ++i) {
-    ret += String.fromCharCode(buf[i] & 0x7F)
-  }
-  return ret
-}
-
-function latin1Slice (buf, start, end) {
-  var ret = ''
-  end = Math.min(buf.length, end)
-
-  for (var i = start; i < end; ++i) {
-    ret += String.fromCharCode(buf[i])
-  }
-  return ret
-}
-
-function hexSlice (buf, start, end) {
-  var len = buf.length
-
-  if (!start || start < 0) start = 0
-  if (!end || end < 0 || end > len) end = len
-
-  var out = ''
-  for (var i = start; i < end; ++i) {
-    out += toHex(buf[i])
-  }
-  return out
-}
-
-function utf16leSlice (buf, start, end) {
-  var bytes = buf.slice(start, end)
-  var res = ''
-  for (var i = 0; i < bytes.length; i += 2) {
-    res += String.fromCharCode(bytes[i] + bytes[i + 1] * 256)
-  }
-  return res
-}
-
-Buffer.prototype.slice = function slice (start, end) {
-  var len = this.length
-  start = ~~start
-  end = end === undefined ? len : ~~end
-
-  if (start < 0) {
-    start += len
-    if (start < 0) start = 0
-  } else if (start > len) {
-    start = len
-  }
-
-  if (end < 0) {
-    end += len
-    if (end < 0) end = 0
-  } else if (end > len) {
-    end = len
-  }
-
-  if (end < start) end = start
-
-  var newBuf
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    newBuf = this.subarray(start, end)
-    newBuf.__proto__ = Buffer.prototype
-  } else {
-    var sliceLen = end - start
-    newBuf = new Buffer(sliceLen, undefined)
-    for (var i = 0; i < sliceLen; ++i) {
-      newBuf[i] = this[i + start]
-    }
-  }
-
-  return newBuf
-}
-
-/*
- * Need to make sure that buffer isn't trying to write out of bounds.
- */
-function checkOffset (offset, ext, length) {
-  if ((offset % 1) !== 0 || offset < 0) throw new RangeError('offset is not uint')
-  if (offset + ext > length) throw new RangeError('Trying to access beyond buffer length')
-}
-
-Buffer.prototype.readUIntLE = function readUIntLE (offset, byteLength, noAssert) {
-  offset = offset | 0
-  byteLength = byteLength | 0
-  if (!noAssert) checkOffset(offset, byteLength, this.length)
-
-  var val = this[offset]
-  var mul = 1
-  var i = 0
-  while (++i < byteLength && (mul *= 0x100)) {
-    val += this[offset + i] * mul
-  }
-
-  return val
-}
-
-Buffer.prototype.readUIntBE = function readUIntBE (offset, byteLength, noAssert) {
-  offset = offset | 0
-  byteLength = byteLength | 0
-  if (!noAssert) {
-    checkOffset(offset, byteLength, this.length)
-  }
-
-  var val = this[offset + --byteLength]
-  var mul = 1
-  while (byteLength > 0 && (mul *= 0x100)) {
-    val += this[offset + --byteLength] * mul
-  }
-
-  return val
-}
-
-Buffer.prototype.readUInt8 = function readUInt8 (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 1, this.length)
-  return this[offset]
-}
-
-Buffer.prototype.readUInt16LE = function readUInt16LE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  return this[offset] | (this[offset + 1] << 8)
-}
-
-Buffer.prototype.readUInt16BE = function readUInt16BE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  return (this[offset] << 8) | this[offset + 1]
-}
-
-Buffer.prototype.readUInt32LE = function readUInt32LE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return ((this[offset]) |
-      (this[offset + 1] << 8) |
-      (this[offset + 2] << 16)) +
-      (this[offset + 3] * 0x1000000)
-}
-
-Buffer.prototype.readUInt32BE = function readUInt32BE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return (this[offset] * 0x1000000) +
-    ((this[offset + 1] << 16) |
-    (this[offset + 2] << 8) |
-    this[offset + 3])
-}
-
-Buffer.prototype.readIntLE = function readIntLE (offset, byteLength, noAssert) {
-  offset = offset | 0
-  byteLength = byteLength | 0
-  if (!noAssert) checkOffset(offset, byteLength, this.length)
-
-  var val = this[offset]
-  var mul = 1
-  var i = 0
-  while (++i < byteLength && (mul *= 0x100)) {
-    val += this[offset + i] * mul
-  }
-  mul *= 0x80
-
-  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
-
-  return val
-}
-
-Buffer.prototype.readIntBE = function readIntBE (offset, byteLength, noAssert) {
-  offset = offset | 0
-  byteLength = byteLength | 0
-  if (!noAssert) checkOffset(offset, byteLength, this.length)
-
-  var i = byteLength
-  var mul = 1
-  var val = this[offset + --i]
-  while (i > 0 && (mul *= 0x100)) {
-    val += this[offset + --i] * mul
-  }
-  mul *= 0x80
-
-  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
-
-  return val
-}
-
-Buffer.prototype.readInt8 = function readInt8 (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 1, this.length)
-  if (!(this[offset] & 0x80)) return (this[offset])
-  return ((0xff - this[offset] + 1) * -1)
-}
-
-Buffer.prototype.readInt16LE = function readInt16LE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  var val = this[offset] | (this[offset + 1] << 8)
-  return (val & 0x8000) ? val | 0xFFFF0000 : val
-}
-
-Buffer.prototype.readInt16BE = function readInt16BE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 2, this.length)
-  var val = this[offset + 1] | (this[offset] << 8)
-  return (val & 0x8000) ? val | 0xFFFF0000 : val
-}
-
-Buffer.prototype.readInt32LE = function readInt32LE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return (this[offset]) |
-    (this[offset + 1] << 8) |
-    (this[offset + 2] << 16) |
-    (this[offset + 3] << 24)
-}
-
-Buffer.prototype.readInt32BE = function readInt32BE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 4, this.length)
-
-  return (this[offset] << 24) |
-    (this[offset + 1] << 16) |
-    (this[offset + 2] << 8) |
-    (this[offset + 3])
-}
-
-Buffer.prototype.readFloatLE = function readFloatLE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 4, this.length)
-  return ieee754.read(this, offset, true, 23, 4)
-}
-
-Buffer.prototype.readFloatBE = function readFloatBE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 4, this.length)
-  return ieee754.read(this, offset, false, 23, 4)
-}
-
-Buffer.prototype.readDoubleLE = function readDoubleLE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 8, this.length)
-  return ieee754.read(this, offset, true, 52, 8)
-}
-
-Buffer.prototype.readDoubleBE = function readDoubleBE (offset, noAssert) {
-  if (!noAssert) checkOffset(offset, 8, this.length)
-  return ieee754.read(this, offset, false, 52, 8)
-}
-
-function checkInt (buf, value, offset, ext, max, min) {
-  if (!Buffer.isBuffer(buf)) throw new TypeError('"buffer" argument must be a Buffer instance')
-  if (value > max || value < min) throw new RangeError('"value" argument is out of bounds')
-  if (offset + ext > buf.length) throw new RangeError('Index out of range')
-}
-
-Buffer.prototype.writeUIntLE = function writeUIntLE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset | 0
-  byteLength = byteLength | 0
-  if (!noAssert) {
-    var maxBytes = Math.pow(2, 8 * byteLength) - 1
-    checkInt(this, value, offset, byteLength, maxBytes, 0)
-  }
-
-  var mul = 1
-  var i = 0
-  this[offset] = value & 0xFF
-  while (++i < byteLength && (mul *= 0x100)) {
-    this[offset + i] = (value / mul) & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeUIntBE = function writeUIntBE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset | 0
-  byteLength = byteLength | 0
-  if (!noAssert) {
-    var maxBytes = Math.pow(2, 8 * byteLength) - 1
-    checkInt(this, value, offset, byteLength, maxBytes, 0)
-  }
-
-  var i = byteLength - 1
-  var mul = 1
-  this[offset + i] = value & 0xFF
-  while (--i >= 0 && (mul *= 0x100)) {
-    this[offset + i] = (value / mul) & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeUInt8 = function writeUInt8 (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 1, 0xff, 0)
-  if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
-  this[offset] = (value & 0xff)
-  return offset + 1
-}
-
-function objectWriteUInt16 (buf, value, offset, littleEndian) {
-  if (value < 0) value = 0xffff + value + 1
-  for (var i = 0, j = Math.min(buf.length - offset, 2); i < j; ++i) {
-    buf[offset + i] = (value & (0xff << (8 * (littleEndian ? i : 1 - i)))) >>>
-      (littleEndian ? i : 1 - i) * 8
-  }
-}
-
-Buffer.prototype.writeUInt16LE = function writeUInt16LE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = (value & 0xff)
-    this[offset + 1] = (value >>> 8)
-  } else {
-    objectWriteUInt16(this, value, offset, true)
-  }
-  return offset + 2
-}
-
-Buffer.prototype.writeUInt16BE = function writeUInt16BE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = (value >>> 8)
-    this[offset + 1] = (value & 0xff)
-  } else {
-    objectWriteUInt16(this, value, offset, false)
-  }
-  return offset + 2
-}
-
-function objectWriteUInt32 (buf, value, offset, littleEndian) {
-  if (value < 0) value = 0xffffffff + value + 1
-  for (var i = 0, j = Math.min(buf.length - offset, 4); i < j; ++i) {
-    buf[offset + i] = (value >>> (littleEndian ? i : 3 - i) * 8) & 0xff
-  }
-}
-
-Buffer.prototype.writeUInt32LE = function writeUInt32LE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset + 3] = (value >>> 24)
-    this[offset + 2] = (value >>> 16)
-    this[offset + 1] = (value >>> 8)
-    this[offset] = (value & 0xff)
-  } else {
-    objectWriteUInt32(this, value, offset, true)
-  }
-  return offset + 4
-}
-
-Buffer.prototype.writeUInt32BE = function writeUInt32BE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = (value >>> 24)
-    this[offset + 1] = (value >>> 16)
-    this[offset + 2] = (value >>> 8)
-    this[offset + 3] = (value & 0xff)
-  } else {
-    objectWriteUInt32(this, value, offset, false)
-  }
-  return offset + 4
-}
-
-Buffer.prototype.writeIntLE = function writeIntLE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) {
-    var limit = Math.pow(2, 8 * byteLength - 1)
-
-    checkInt(this, value, offset, byteLength, limit - 1, -limit)
-  }
-
-  var i = 0
-  var mul = 1
-  var sub = 0
-  this[offset] = value & 0xFF
-  while (++i < byteLength && (mul *= 0x100)) {
-    if (value < 0 && sub === 0 && this[offset + i - 1] !== 0) {
-      sub = 1
-    }
-    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeIntBE = function writeIntBE (value, offset, byteLength, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) {
-    var limit = Math.pow(2, 8 * byteLength - 1)
-
-    checkInt(this, value, offset, byteLength, limit - 1, -limit)
-  }
-
-  var i = byteLength - 1
-  var mul = 1
-  var sub = 0
-  this[offset + i] = value & 0xFF
-  while (--i >= 0 && (mul *= 0x100)) {
-    if (value < 0 && sub === 0 && this[offset + i + 1] !== 0) {
-      sub = 1
-    }
-    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
-  }
-
-  return offset + byteLength
-}
-
-Buffer.prototype.writeInt8 = function writeInt8 (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 1, 0x7f, -0x80)
-  if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
-  if (value < 0) value = 0xff + value + 1
-  this[offset] = (value & 0xff)
-  return offset + 1
-}
-
-Buffer.prototype.writeInt16LE = function writeInt16LE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = (value & 0xff)
-    this[offset + 1] = (value >>> 8)
-  } else {
-    objectWriteUInt16(this, value, offset, true)
-  }
-  return offset + 2
-}
-
-Buffer.prototype.writeInt16BE = function writeInt16BE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = (value >>> 8)
-    this[offset + 1] = (value & 0xff)
-  } else {
-    objectWriteUInt16(this, value, offset, false)
-  }
-  return offset + 2
-}
-
-Buffer.prototype.writeInt32LE = function writeInt32LE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = (value & 0xff)
-    this[offset + 1] = (value >>> 8)
-    this[offset + 2] = (value >>> 16)
-    this[offset + 3] = (value >>> 24)
-  } else {
-    objectWriteUInt32(this, value, offset, true)
-  }
-  return offset + 4
-}
-
-Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) {
-  value = +value
-  offset = offset | 0
-  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
-  if (value < 0) value = 0xffffffff + value + 1
-  if (Buffer.TYPED_ARRAY_SUPPORT) {
-    this[offset] = (value >>> 24)
-    this[offset + 1] = (value >>> 16)
-    this[offset + 2] = (value >>> 8)
-    this[offset + 3] = (value & 0xff)
-  } else {
-    objectWriteUInt32(this, value, offset, false)
-  }
-  return offset + 4
-}
-
-function checkIEEE754 (buf, value, offset, ext, max, min) {
-  if (offset + ext > buf.length) throw new RangeError('Index out of range')
-  if (offset < 0) throw new RangeError('Index out of range')
-}
-
-function writeFloat (buf, value, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    checkIEEE754(buf, value, offset, 4, 3.4028234663852886e+38, -3.4028234663852886e+38)
-  }
-  ieee754.write(buf, value, offset, littleEndian, 23, 4)
-  return offset + 4
-}
-
-Buffer.prototype.writeFloatLE = function writeFloatLE (value, offset, noAssert) {
-  return writeFloat(this, value, offset, true, noAssert)
-}
-
-Buffer.prototype.writeFloatBE = function writeFloatBE (value, offset, noAssert) {
-  return writeFloat(this, value, offset, false, noAssert)
-}
-
-function writeDouble (buf, value, offset, littleEndian, noAssert) {
-  if (!noAssert) {
-    checkIEEE754(buf, value, offset, 8, 1.7976931348623157E+308, -1.7976931348623157E+308)
-  }
-  ieee754.write(buf, value, offset, littleEndian, 52, 8)
-  return offset + 8
-}
-
-Buffer.prototype.writeDoubleLE = function writeDoubleLE (value, offset, noAssert) {
-  return writeDouble(this, value, offset, true, noAssert)
-}
-
-Buffer.prototype.writeDoubleBE = function writeDoubleBE (value, offset, noAssert) {
-  return writeDouble(this, value, offset, false, noAssert)
-}
-
-// copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
-Buffer.prototype.copy = function copy (target, targetStart, start, end) {
-  if (!start) start = 0
-  if (!end && end !== 0) end = this.length
-  if (targetStart >= target.length) targetStart = target.length
-  if (!targetStart) targetStart = 0
-  if (end > 0 && end < start) end = start
-
-  // Copy 0 bytes; we're done
-  if (end === start) return 0
-  if (target.length === 0 || this.length === 0) return 0
-
-  // Fatal error conditions
-  if (targetStart < 0) {
-    throw new RangeError('targetStart out of bounds')
-  }
-  if (start < 0 || start >= this.length) throw new RangeError('sourceStart out of bounds')
-  if (end < 0) throw new RangeError('sourceEnd out of bounds')
-
-  // Are we oob?
-  if (end > this.length) end = this.length
-  if (target.length - targetStart < end - start) {
-    end = target.length - targetStart + start
-  }
-
-  var len = end - start
-  var i
-
-  if (this === target && start < targetStart && targetStart < end) {
-    // descending copy from end
-    for (i = len - 1; i >= 0; --i) {
-      target[i + targetStart] = this[i + start]
-    }
-  } else if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
-    // ascending copy from start
-    for (i = 0; i < len; ++i) {
-      target[i + targetStart] = this[i + start]
-    }
-  } else {
-    Uint8Array.prototype.set.call(
-      target,
-      this.subarray(start, start + len),
-      targetStart
-    )
-  }
-
-  return len
-}
-
-// Usage:
-//    buffer.fill(number[, offset[, end]])
-//    buffer.fill(buffer[, offset[, end]])
-//    buffer.fill(string[, offset[, end]][, encoding])
-Buffer.prototype.fill = function fill (val, start, end, encoding) {
-  // Handle string cases:
-  if (typeof val === 'string') {
-    if (typeof start === 'string') {
-      encoding = start
-      start = 0
-      end = this.length
-    } else if (typeof end === 'string') {
-      encoding = end
-      end = this.length
-    }
-    if (val.length === 1) {
-      var code = val.charCodeAt(0)
-      if (code < 256) {
-        val = code
-      }
-    }
-    if (encoding !== undefined && typeof encoding !== 'string') {
-      throw new TypeError('encoding must be a string')
-    }
-    if (typeof encoding === 'string' && !Buffer.isEncoding(encoding)) {
-      throw new TypeError('Unknown encoding: ' + encoding)
-    }
-  } else if (typeof val === 'number') {
-    val = val & 255
-  }
-
-  // Invalid ranges are not set to a default, so can range check early.
-  if (start < 0 || this.length < start || this.length < end) {
-    throw new RangeError('Out of range index')
-  }
-
-  if (end <= start) {
-    return this
-  }
-
-  start = start >>> 0
-  end = end === undefined ? this.length : end >>> 0
-
-  if (!val) val = 0
-
-  var i
-  if (typeof val === 'number') {
-    for (i = start; i < end; ++i) {
-      this[i] = val
-    }
-  } else {
-    var bytes = Buffer.isBuffer(val)
-      ? val
-      : utf8ToBytes(new Buffer(val, encoding).toString())
-    var len = bytes.length
-    for (i = 0; i < end - start; ++i) {
-      this[i + start] = bytes[i % len]
-    }
-  }
-
-  return this
-}
-
-// HELPER FUNCTIONS
-// ================
-
-var INVALID_BASE64_RE = /[^+\/0-9A-Za-z-_]/g
-
-function base64clean (str) {
-  // Node strips out invalid characters like \n and \t from the string, base64-js does not
-  str = stringtrim(str).replace(INVALID_BASE64_RE, '')
-  // Node converts strings with length < 2 to ''
-  if (str.length < 2) return ''
-  // Node allows for non-padded base64 strings (missing trailing ===), base64-js does not
-  while (str.length % 4 !== 0) {
-    str = str + '='
-  }
-  return str
-}
-
-function stringtrim (str) {
-  if (str.trim) return str.trim()
-  return str.replace(/^\s+|\s+$/g, '')
-}
-
-function toHex (n) {
-  if (n < 16) return '0' + n.toString(16)
-  return n.toString(16)
-}
-
-function utf8ToBytes (string, units) {
-  units = units || Infinity
-  var codePoint
-  var length = string.length
-  var leadSurrogate = null
-  var bytes = []
-
-  for (var i = 0; i < length; ++i) {
-    codePoint = string.charCodeAt(i)
-
-    // is surrogate component
-    if (codePoint > 0xD7FF && codePoint < 0xE000) {
-      // last char was a lead
-      if (!leadSurrogate) {
-        // no lead yet
-        if (codePoint > 0xDBFF) {
-          // unexpected trail
-          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-          continue
-        } else if (i + 1 === length) {
-          // unpaired lead
-          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-          continue
-        }
-
-        // valid lead
-        leadSurrogate = codePoint
-
-        continue
-      }
-
-      // 2 leads in a row
-      if (codePoint < 0xDC00) {
-        if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-        leadSurrogate = codePoint
-        continue
-      }
-
-      // valid surrogate pair
-      codePoint = (leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00) + 0x10000
-    } else if (leadSurrogate) {
-      // valid bmp char, but last char was a lead
-      if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
-    }
-
-    leadSurrogate = null
-
-    // encode utf8
-    if (codePoint < 0x80) {
-      if ((units -= 1) < 0) break
-      bytes.push(codePoint)
-    } else if (codePoint < 0x800) {
-      if ((units -= 2) < 0) break
-      bytes.push(
-        codePoint >> 0x6 | 0xC0,
-        codePoint & 0x3F | 0x80
-      )
-    } else if (codePoint < 0x10000) {
-      if ((units -= 3) < 0) break
-      bytes.push(
-        codePoint >> 0xC | 0xE0,
-        codePoint >> 0x6 & 0x3F | 0x80,
-        codePoint & 0x3F | 0x80
-      )
-    } else if (codePoint < 0x110000) {
-      if ((units -= 4) < 0) break
-      bytes.push(
-        codePoint >> 0x12 | 0xF0,
-        codePoint >> 0xC & 0x3F | 0x80,
-        codePoint >> 0x6 & 0x3F | 0x80,
-        codePoint & 0x3F | 0x80
-      )
-    } else {
-      throw new Error('Invalid code point')
-    }
-  }
-
-  return bytes
-}
-
-function asciiToBytes (str) {
-  var byteArray = []
-  for (var i = 0; i < str.length; ++i) {
-    // Node's code seems to be doing this and not & 0x7F..
-    byteArray.push(str.charCodeAt(i) & 0xFF)
-  }
-  return byteArray
-}
-
-function utf16leToBytes (str, units) {
-  var c, hi, lo
-  var byteArray = []
-  for (var i = 0; i < str.length; ++i) {
-    if ((units -= 2) < 0) break
-
-    c = str.charCodeAt(i)
-    hi = c >> 8
-    lo = c % 256
-    byteArray.push(lo)
-    byteArray.push(hi)
-  }
-
-  return byteArray
-}
-
-function base64ToBytes (str) {
-  return base64.toByteArray(base64clean(str))
-}
-
-function blitBuffer (src, dst, offset, length) {
-  for (var i = 0; i < length; ++i) {
-    if ((i + offset >= dst.length) || (i >= src.length)) break
-    dst[i + offset] = src[i]
-  }
-  return i
-}
-
-function isnan (val) {
-  return val !== val // eslint-disable-line no-self-compare
-}
-
-/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../webpack/buildin/global.js */ "./node_modules/webpack/buildin/global.js")))
-
-/***/ }),
-
 /***/ "./node_modules/const-ninf-float32/lib/index.js":
 /*!******************************************************!*\
   !*** ./node_modules/const-ninf-float32/lib/index.js ***!
@@ -7782,319 +5997,6 @@ var n=r(73),i=r(72),a=r(38);function o(){return f.TYPED_ARRAY_SUPPORT?2147483647
  */
 function n(e,t){if(e===t)return 0;for(var r=e.length,n=t.length,i=0,a=Math.min(r,n);i<a;++i)if(e[i]!==t[i]){r=e[i],n=t[i];break}return r<n?-1:n<r?1:0}function i(e){return t.Buffer&&"function"==typeof t.Buffer.isBuffer?t.Buffer.isBuffer(e):!(null==e||!e._isBuffer)}var a=r(29),o=Object.prototype.hasOwnProperty,s=Array.prototype.slice,f="foo"===function(){}.name;function l(e){return Object.prototype.toString.call(e)}function u(e){return!i(e)&&("function"==typeof t.ArrayBuffer&&("function"==typeof ArrayBuffer.isView?ArrayBuffer.isView(e):!!e&&(e instanceof DataView||!!(e.buffer&&e.buffer instanceof ArrayBuffer))))}var h=e.exports=_,d=/\s*function\s+([^\(\s]*)\s*/;function c(e){if(a.isFunction(e)){if(f)return e.name;var t=e.toString().match(d);return t&&t[1]}}function p(e,t){return"string"==typeof e?e.length<t?e:e.slice(0,t):e}function g(e){if(f||!a.isFunction(e))return a.inspect(e);var t=c(e);return"[Function"+(t?": "+t:"")+"]"}function m(e,t,r,n,i){throw new h.AssertionError({message:r,actual:e,expected:t,operator:n,stackStartFunction:i})}function _(e,t){e||m(e,!0,t,"==",h.ok)}function b(e,t,r,o){if(e===t)return!0;if(i(e)&&i(t))return 0===n(e,t);if(a.isDate(e)&&a.isDate(t))return e.getTime()===t.getTime();if(a.isRegExp(e)&&a.isRegExp(t))return e.source===t.source&&e.global===t.global&&e.multiline===t.multiline&&e.lastIndex===t.lastIndex&&e.ignoreCase===t.ignoreCase;if(null!==e&&"object"==typeof e||null!==t&&"object"==typeof t){if(u(e)&&u(t)&&l(e)===l(t)&&!(e instanceof Float32Array||e instanceof Float64Array))return 0===n(new Uint8Array(e.buffer),new Uint8Array(t.buffer));if(i(e)!==i(t))return!1;var f=(o=o||{actual:[],expected:[]}).actual.indexOf(e);return-1!==f&&f===o.expected.indexOf(t)||(o.actual.push(e),o.expected.push(t),function(e,t,r,n){if(null===e||void 0===e||null===t||void 0===t)return!1;if(a.isPrimitive(e)||a.isPrimitive(t))return e===t;if(r&&Object.getPrototypeOf(e)!==Object.getPrototypeOf(t))return!1;var i=y(e),o=y(t);if(i&&!o||!i&&o)return!1;if(i)return e=s.call(e),t=s.call(t),b(e,t,r);var f,l,u=E(e),h=E(t);if(u.length!==h.length)return!1;for(u.sort(),h.sort(),l=u.length-1;l>=0;l--)if(u[l]!==h[l])return!1;for(l=u.length-1;l>=0;l--)if(f=u[l],!b(e[f],t[f],r,n))return!1;return!0}(e,t,r,o))}return r?e===t:e==t}function y(e){return"[object Arguments]"==Object.prototype.toString.call(e)}function v(e,t){if(!e||!t)return!1;if("[object RegExp]"==Object.prototype.toString.call(t))return t.test(e);try{if(e instanceof t)return!0}catch(e){}return!Error.isPrototypeOf(t)&&!0===t.call({},e)}function w(e,t,r,n){var i;if("function"!=typeof t)throw new TypeError('"block" argument must be a function');"string"==typeof r&&(n=r,r=null),i=function(e){var t;try{e()}catch(e){t=e}return t}(t),n=(r&&r.name?" ("+r.name+").":".")+(n?" "+n:"."),e&&!i&&m(i,r,"Missing expected exception"+n);var o="string"==typeof n,s=!e&&a.isError(i),f=!e&&i&&!r;if((s&&o&&v(i,r)||f)&&m(i,r,"Got unwanted exception"+n),e&&i&&r&&!v(i,r)||!e&&i)throw i}h.AssertionError=function(e){var t;this.name="AssertionError",this.actual=e.actual,this.expected=e.expected,this.operator=e.operator,e.message?(this.message=e.message,this.generatedMessage=!1):(this.message=p(g((t=this).actual),128)+" "+t.operator+" "+p(g(t.expected),128),this.generatedMessage=!0);var r=e.stackStartFunction||m;if(Error.captureStackTrace)Error.captureStackTrace(this,r);else{var n=new Error;if(n.stack){var i=n.stack,a=c(r),o=i.indexOf("\n"+a);if(o>=0){var s=i.indexOf("\n",o+1);i=i.substring(s+1)}this.stack=i}}},a.inherits(h.AssertionError,Error),h.fail=m,h.ok=_,h.equal=function(e,t,r){e!=t&&m(e,t,r,"==",h.equal)},h.notEqual=function(e,t,r){e==t&&m(e,t,r,"!=",h.notEqual)},h.deepEqual=function(e,t,r){b(e,t,!1)||m(e,t,r,"deepEqual",h.deepEqual)},h.deepStrictEqual=function(e,t,r){b(e,t,!0)||m(e,t,r,"deepStrictEqual",h.deepStrictEqual)},h.notDeepEqual=function(e,t,r){b(e,t,!1)&&m(e,t,r,"notDeepEqual",h.notDeepEqual)},h.notDeepStrictEqual=function e(t,r,n){b(t,r,!0)&&m(t,r,n,"notDeepStrictEqual",e)},h.strictEqual=function(e,t,r){e!==t&&m(e,t,r,"===",h.strictEqual)},h.notStrictEqual=function(e,t,r){e===t&&m(e,t,r,"!==",h.notStrictEqual)},h.throws=function(e,t,r){w(!0,e,t,r)},h.doesNotThrow=function(e,t,r){w(!1,e,t,r)},h.ifError=function(e){if(e)throw e};var E=Object.keys||function(e){var t=[];for(var r in e)o.call(e,r)&&t.push(r);return t}}).call(this,r(0))},function(e,t,r){"use strict";e.exports=a;var n=r(2),i=r(6);function a(e){if(!(this instanceof a))return new a(e);n.call(this,e),this._transformState={afterTransform:function(e,t){var r=this._transformState;r.transforming=!1;var n=r.writecb;if(!n)return this.emit("error",new Error("write callback called multiple times"));r.writechunk=null,r.writecb=null,null!=t&&this.push(t),n(e);var i=this._readableState;i.reading=!1,(i.needReadable||i.length<i.highWaterMark)&&this._read(i.highWaterMark)}.bind(this),needTransform:!1,transforming:!1,writecb:null,writechunk:null,writeencoding:null},this._readableState.needReadable=!0,this._readableState.sync=!1,e&&("function"==typeof e.transform&&(this._transform=e.transform),"function"==typeof e.flush&&(this._flush=e.flush)),this.on("prefinish",o)}function o(){var e=this;"function"==typeof this._flush?this._flush(function(t,r){s(e,t,r)}):s(this,null,null)}function s(e,t,r){if(t)return e.emit("error",t);if(null!=r&&e.push(r),e._writableState.length)throw new Error("Calling transform done when ws.length != 0");if(e._transformState.transforming)throw new Error("Calling transform done when still transforming");return e.push(null)}i.inherits=r(5),i.inherits(a,n),a.prototype.push=function(e,t){return this._transformState.needTransform=!1,n.prototype.push.call(this,e,t)},a.prototype._transform=function(e,t,r){throw new Error("_transform() is not implemented")},a.prototype._write=function(e,t,r){var n=this._transformState;if(n.writecb=r,n.writechunk=e,n.writeencoding=t,!n.transforming){var i=this._readableState;(n.needTransform||i.needReadable||i.length<i.highWaterMark)&&this._read(i.highWaterMark)}},a.prototype._read=function(e){var t=this._transformState;null!==t.writechunk&&t.writecb&&!t.transforming?(t.transforming=!0,this._transform(t.writechunk,t.writeencoding,t.afterTransform)):t.needTransform=!0},a.prototype._destroy=function(e,t){var r=this;n.prototype._destroy.call(this,e,function(e){t(e),r.emit("close")})}},function(e,t,r){"use strict";var n=r(9).Buffer,i=n.isEncoding||function(e){switch((e=""+e)&&e.toLowerCase()){case"hex":case"utf8":case"utf-8":case"ascii":case"binary":case"base64":case"ucs2":case"ucs-2":case"utf16le":case"utf-16le":case"raw":return!0;default:return!1}};function a(e){var t;switch(this.encoding=function(e){var t=function(e){if(!e)return"utf8";for(var t;;)switch(e){case"utf8":case"utf-8":return"utf8";case"ucs2":case"ucs-2":case"utf16le":case"utf-16le":return"utf16le";case"latin1":case"binary":return"latin1";case"base64":case"ascii":case"hex":return e;default:if(t)return;e=(""+e).toLowerCase(),t=!0}}(e);if("string"!=typeof t&&(n.isEncoding===i||!i(e)))throw new Error("Unknown encoding: "+e);return t||e}(e),this.encoding){case"utf16le":this.text=f,this.end=l,t=4;break;case"utf8":this.fillLast=s,t=4;break;case"base64":this.text=u,this.end=h,t=3;break;default:return this.write=d,void(this.end=c)}this.lastNeed=0,this.lastTotal=0,this.lastChar=n.allocUnsafe(t)}function o(e){return e<=127?0:e>>5==6?2:e>>4==14?3:e>>3==30?4:-1}function s(e){var t=this.lastTotal-this.lastNeed,r=function(e,t,r){if(128!=(192&t[0]))return e.lastNeed=0,"�".repeat(r);if(e.lastNeed>1&&t.length>1){if(128!=(192&t[1]))return e.lastNeed=1,"�".repeat(r+1);if(e.lastNeed>2&&t.length>2&&128!=(192&t[2]))return e.lastNeed=2,"�".repeat(r+2)}}(this,e,t);return void 0!==r?r:this.lastNeed<=e.length?(e.copy(this.lastChar,t,0,this.lastNeed),this.lastChar.toString(this.encoding,0,this.lastTotal)):(e.copy(this.lastChar,t,0,e.length),void(this.lastNeed-=e.length))}function f(e,t){if((e.length-t)%2==0){var r=e.toString("utf16le",t);if(r){var n=r.charCodeAt(r.length-1);if(n>=55296&&n<=56319)return this.lastNeed=2,this.lastTotal=4,this.lastChar[0]=e[e.length-2],this.lastChar[1]=e[e.length-1],r.slice(0,-1)}return r}return this.lastNeed=1,this.lastTotal=2,this.lastChar[0]=e[e.length-1],e.toString("utf16le",t,e.length-1)}function l(e){var t=e&&e.length?this.write(e):"";if(this.lastNeed){var r=this.lastTotal-this.lastNeed;return t+this.lastChar.toString("utf16le",0,r)}return t}function u(e,t){var r=(e.length-t)%3;return 0===r?e.toString("base64",t):(this.lastNeed=3-r,this.lastTotal=3,1===r?this.lastChar[0]=e[e.length-1]:(this.lastChar[0]=e[e.length-2],this.lastChar[1]=e[e.length-1]),e.toString("base64",t,e.length-r))}function h(e){var t=e&&e.length?this.write(e):"";return this.lastNeed?t+this.lastChar.toString("base64",0,3-this.lastNeed):t}function d(e){return e.toString(this.encoding)}function c(e){return e&&e.length?this.write(e):""}t.StringDecoder=a,a.prototype.write=function(e){if(0===e.length)return"";var t,r;if(this.lastNeed){if(void 0===(t=this.fillLast(e)))return"";r=this.lastNeed,this.lastNeed=0}else r=0;return r<e.length?t?t+this.text(e,r):this.text(e,r):t||""},a.prototype.end=function(e){var t=e&&e.length?this.write(e):"";return this.lastNeed?t+"�".repeat(this.lastTotal-this.lastNeed):t},a.prototype.text=function(e,t){var r=function(e,t,r){var n=t.length-1;if(n<r)return 0;var i=o(t[n]);if(i>=0)return i>0&&(e.lastNeed=i-1),i;if(--n<r)return 0;if((i=o(t[n]))>=0)return i>0&&(e.lastNeed=i-2),i;if(--n<r)return 0;if((i=o(t[n]))>=0)return i>0&&(2===i?i=0:e.lastNeed=i-3),i;return 0}(this,e,t);if(!this.lastNeed)return e.toString("utf8",t);this.lastTotal=r;var n=e.length-(r-this.lastNeed);return e.copy(this.lastChar,0,n),e.toString("utf8",t,n)},a.prototype.fillLast=function(e){if(this.lastNeed<=e.length)return e.copy(this.lastChar,this.lastTotal-this.lastNeed,0,this.lastNeed),this.lastChar.toString(this.encoding,0,this.lastTotal);e.copy(this.lastChar,this.lastTotal-this.lastNeed,0,e.length),this.lastNeed-=e.length}},function(e,t,r){"use strict";var n=r(10);function i(e,t){e.emit("error",t)}e.exports={destroy:function(e,t){var r=this,a=this._readableState&&this._readableState.destroyed,o=this._writableState&&this._writableState.destroyed;return a||o?(t?t(e):!e||this._writableState&&this._writableState.errorEmitted||n.nextTick(i,this,e),this):(this._readableState&&(this._readableState.destroyed=!0),this._writableState&&(this._writableState.destroyed=!0),this._destroy(e||null,function(e){!t&&e?(n.nextTick(i,r,e),r._writableState&&(r._writableState.errorEmitted=!0)):t&&t(e)}),this)},undestroy:function(){this._readableState&&(this._readableState.destroyed=!1,this._readableState.reading=!1,this._readableState.ended=!1,this._readableState.endEmitted=!1),this._writableState&&(this._writableState.destroyed=!1,this._writableState.ended=!1,this._writableState.ending=!1,this._writableState.finished=!1,this._writableState.errorEmitted=!1)}}},function(e,t,r){e.exports=r(20).EventEmitter},function(e,t,r){"use strict";(function(t,n){var i=r(10);e.exports=y;var a,o=r(38);y.ReadableState=b;r(20).EventEmitter;var s=function(e,t){return e.listeners(t).length},f=r(34),l=r(9).Buffer,u=t.Uint8Array||function(){};var h=r(6);h.inherits=r(5);var d=r(66),c=void 0;c=d&&d.debuglog?d.debuglog("stream"):function(){};var p,g=r(65),m=r(33);h.inherits(y,f);var _=["error","close","destroy","pause","resume"];function b(e,t){a=a||r(2),e=e||{};var n=t instanceof a;this.objectMode=!!e.objectMode,n&&(this.objectMode=this.objectMode||!!e.readableObjectMode);var i=e.highWaterMark,o=e.readableHighWaterMark,s=this.objectMode?16:16384;this.highWaterMark=i||0===i?i:n&&(o||0===o)?o:s,this.highWaterMark=Math.floor(this.highWaterMark),this.buffer=new g,this.length=0,this.pipes=null,this.pipesCount=0,this.flowing=null,this.ended=!1,this.endEmitted=!1,this.reading=!1,this.sync=!0,this.needReadable=!1,this.emittedReadable=!1,this.readableListening=!1,this.resumeScheduled=!1,this.destroyed=!1,this.defaultEncoding=e.defaultEncoding||"utf8",this.awaitDrain=0,this.readingMore=!1,this.decoder=null,this.encoding=null,e.encoding&&(p||(p=r(32).StringDecoder),this.decoder=new p(e.encoding),this.encoding=e.encoding)}function y(e){if(a=a||r(2),!(this instanceof y))return new y(e);this._readableState=new b(e,this),this.readable=!0,e&&("function"==typeof e.read&&(this._read=e.read),"function"==typeof e.destroy&&(this._destroy=e.destroy)),f.call(this)}function v(e,t,r,n,i){var a,o=e._readableState;null===t?(o.reading=!1,function(e,t){if(t.ended)return;if(t.decoder){var r=t.decoder.end();r&&r.length&&(t.buffer.push(r),t.length+=t.objectMode?1:r.length)}t.ended=!0,k(e)}(e,o)):(i||(a=function(e,t){var r;n=t,l.isBuffer(n)||n instanceof u||"string"==typeof t||void 0===t||e.objectMode||(r=new TypeError("Invalid non-string/buffer chunk"));var n;return r}(o,t)),a?e.emit("error",a):o.objectMode||t&&t.length>0?("string"==typeof t||o.objectMode||Object.getPrototypeOf(t)===l.prototype||(t=function(e){return l.from(e)}(t)),n?o.endEmitted?e.emit("error",new Error("stream.unshift() after end event")):w(e,o,t,!0):o.ended?e.emit("error",new Error("stream.push() after EOF")):(o.reading=!1,o.decoder&&!r?(t=o.decoder.write(t),o.objectMode||0!==t.length?w(e,o,t,!1):A(e,o)):w(e,o,t,!1))):n||(o.reading=!1));return function(e){return!e.ended&&(e.needReadable||e.length<e.highWaterMark||0===e.length)}(o)}function w(e,t,r,n){t.flowing&&0===t.length&&!t.sync?(e.emit("data",r),e.read(0)):(t.length+=t.objectMode?1:r.length,n?t.buffer.unshift(r):t.buffer.push(r),t.needReadable&&k(e)),A(e,t)}Object.defineProperty(y.prototype,"destroyed",{get:function(){return void 0!==this._readableState&&this._readableState.destroyed},set:function(e){this._readableState&&(this._readableState.destroyed=e)}}),y.prototype.destroy=m.destroy,y.prototype._undestroy=m.undestroy,y.prototype._destroy=function(e,t){this.push(null),t(e)},y.prototype.push=function(e,t){var r,n=this._readableState;return n.objectMode?r=!0:"string"==typeof e&&((t=t||n.defaultEncoding)!==n.encoding&&(e=l.from(e,t),t=""),r=!0),v(this,e,t,!1,r)},y.prototype.unshift=function(e){return v(this,e,null,!0,!1)},y.prototype.isPaused=function(){return!1===this._readableState.flowing},y.prototype.setEncoding=function(e){return p||(p=r(32).StringDecoder),this._readableState.decoder=new p(e),this._readableState.encoding=e,this};var E=8388608;function x(e,t){return e<=0||0===t.length&&t.ended?0:t.objectMode?1:e!=e?t.flowing&&t.length?t.buffer.head.data.length:t.length:(e>t.highWaterMark&&(t.highWaterMark=function(e){return e>=E?e=E:(e--,e|=e>>>1,e|=e>>>2,e|=e>>>4,e|=e>>>8,e|=e>>>16,e++),e}(e)),e<=t.length?e:t.ended?t.length:(t.needReadable=!0,0))}function k(e){var t=e._readableState;t.needReadable=!1,t.emittedReadable||(c("emitReadable",t.flowing),t.emittedReadable=!0,t.sync?i.nextTick(S,e):S(e))}function S(e){c("emit readable"),e.emit("readable"),R(e)}function A(e,t){t.readingMore||(t.readingMore=!0,i.nextTick(P,e,t))}function P(e,t){for(var r=t.length;!t.reading&&!t.flowing&&!t.ended&&t.length<t.highWaterMark&&(c("maybeReadMore read 0"),e.read(0),r!==t.length);)r=t.length;t.readingMore=!1}function O(e){c("readable nexttick read 0"),e.read(0)}function T(e,t){t.reading||(c("resume read 0"),e.read(0)),t.resumeScheduled=!1,t.awaitDrain=0,e.emit("resume"),R(e),t.flowing&&!t.reading&&e.read(0)}function R(e){var t=e._readableState;for(c("flow",t.flowing);t.flowing&&null!==e.read(););}function I(e,t){return 0===t.length?null:(t.objectMode?r=t.buffer.shift():!e||e>=t.length?(r=t.decoder?t.buffer.join(""):1===t.buffer.length?t.buffer.head.data:t.buffer.concat(t.length),t.buffer.clear()):r=function(e,t,r){var n;e<t.head.data.length?(n=t.head.data.slice(0,e),t.head.data=t.head.data.slice(e)):n=e===t.head.data.length?t.shift():r?function(e,t){var r=t.head,n=1,i=r.data;e-=i.length;for(;r=r.next;){var a=r.data,o=e>a.length?a.length:e;if(o===a.length?i+=a:i+=a.slice(0,e),0===(e-=o)){o===a.length?(++n,r.next?t.head=r.next:t.head=t.tail=null):(t.head=r,r.data=a.slice(o));break}++n}return t.length-=n,i}(e,t):function(e,t){var r=l.allocUnsafe(e),n=t.head,i=1;n.data.copy(r),e-=n.data.length;for(;n=n.next;){var a=n.data,o=e>a.length?a.length:e;if(a.copy(r,r.length-e,0,o),0===(e-=o)){o===a.length?(++i,n.next?t.head=n.next:t.head=t.tail=null):(t.head=n,n.data=a.slice(o));break}++i}return t.length-=i,r}(e,t);return n}(e,t.buffer,t.decoder),r);var r}function D(e){var t=e._readableState;if(t.length>0)throw new Error('"endReadable()" called on non-empty stream');t.endEmitted||(t.ended=!0,i.nextTick(L,t,e))}function L(e,t){e.endEmitted||0!==e.length||(e.endEmitted=!0,t.readable=!1,t.emit("end"))}function F(e,t){for(var r=0,n=e.length;r<n;r++)if(e[r]===t)return r;return-1}y.prototype.read=function(e){c("read",e),e=parseInt(e,10);var t=this._readableState,r=e;if(0!==e&&(t.emittedReadable=!1),0===e&&t.needReadable&&(t.length>=t.highWaterMark||t.ended))return c("read: emitReadable",t.length,t.ended),0===t.length&&t.ended?D(this):k(this),null;if(0===(e=x(e,t))&&t.ended)return 0===t.length&&D(this),null;var n,i=t.needReadable;return c("need readable",i),(0===t.length||t.length-e<t.highWaterMark)&&c("length less than watermark",i=!0),t.ended||t.reading?c("reading or ended",i=!1):i&&(c("do read"),t.reading=!0,t.sync=!0,0===t.length&&(t.needReadable=!0),this._read(t.highWaterMark),t.sync=!1,t.reading||(e=x(r,t))),null===(n=e>0?I(e,t):null)?(t.needReadable=!0,e=0):t.length-=e,0===t.length&&(t.ended||(t.needReadable=!0),r!==e&&t.ended&&D(this)),null!==n&&this.emit("data",n),n},y.prototype._read=function(e){this.emit("error",new Error("_read() is not implemented"))},y.prototype.pipe=function(e,t){var r=this,a=this._readableState;switch(a.pipesCount){case 0:a.pipes=e;break;case 1:a.pipes=[a.pipes,e];break;default:a.pipes.push(e)}a.pipesCount+=1,c("pipe count=%d opts=%j",a.pipesCount,t);var f=(!t||!1!==t.end)&&e!==n.stdout&&e!==n.stderr?u:y;function l(t,n){c("onunpipe"),t===r&&n&&!1===n.hasUnpiped&&(n.hasUnpiped=!0,c("cleanup"),e.removeListener("close",_),e.removeListener("finish",b),e.removeListener("drain",h),e.removeListener("error",m),e.removeListener("unpipe",l),r.removeListener("end",u),r.removeListener("end",y),r.removeListener("data",g),d=!0,!a.awaitDrain||e._writableState&&!e._writableState.needDrain||h())}function u(){c("onend"),e.end()}a.endEmitted?i.nextTick(f):r.once("end",f),e.on("unpipe",l);var h=function(e){return function(){var t=e._readableState;c("pipeOnDrain",t.awaitDrain),t.awaitDrain&&t.awaitDrain--,0===t.awaitDrain&&s(e,"data")&&(t.flowing=!0,R(e))}}(r);e.on("drain",h);var d=!1;var p=!1;function g(t){c("ondata"),p=!1,!1!==e.write(t)||p||((1===a.pipesCount&&a.pipes===e||a.pipesCount>1&&-1!==F(a.pipes,e))&&!d&&(c("false write response, pause",r._readableState.awaitDrain),r._readableState.awaitDrain++,p=!0),r.pause())}function m(t){c("onerror",t),y(),e.removeListener("error",m),0===s(e,"error")&&e.emit("error",t)}function _(){e.removeListener("finish",b),y()}function b(){c("onfinish"),e.removeListener("close",_),y()}function y(){c("unpipe"),r.unpipe(e)}return r.on("data",g),function(e,t,r){if("function"==typeof e.prependListener)return e.prependListener(t,r);e._events&&e._events[t]?o(e._events[t])?e._events[t].unshift(r):e._events[t]=[r,e._events[t]]:e.on(t,r)}(e,"error",m),e.once("close",_),e.once("finish",b),e.emit("pipe",r),a.flowing||(c("pipe resume"),r.resume()),e},y.prototype.unpipe=function(e){var t=this._readableState,r={hasUnpiped:!1};if(0===t.pipesCount)return this;if(1===t.pipesCount)return e&&e!==t.pipes?this:(e||(e=t.pipes),t.pipes=null,t.pipesCount=0,t.flowing=!1,e&&e.emit("unpipe",this,r),this);if(!e){var n=t.pipes,i=t.pipesCount;t.pipes=null,t.pipesCount=0,t.flowing=!1;for(var a=0;a<i;a++)n[a].emit("unpipe",this,r);return this}var o=F(t.pipes,e);return-1===o?this:(t.pipes.splice(o,1),t.pipesCount-=1,1===t.pipesCount&&(t.pipes=t.pipes[0]),e.emit("unpipe",this,r),this)},y.prototype.on=function(e,t){var r=f.prototype.on.call(this,e,t);if("data"===e)!1!==this._readableState.flowing&&this.resume();else if("readable"===e){var n=this._readableState;n.endEmitted||n.readableListening||(n.readableListening=n.needReadable=!0,n.emittedReadable=!1,n.reading?n.length&&k(this):i.nextTick(O,this))}return r},y.prototype.addListener=y.prototype.on,y.prototype.resume=function(){var e=this._readableState;return e.flowing||(c("resume"),e.flowing=!0,function(e,t){t.resumeScheduled||(t.resumeScheduled=!0,i.nextTick(T,e,t))}(this,e)),this},y.prototype.pause=function(){return c("call pause flowing=%j",this._readableState.flowing),!1!==this._readableState.flowing&&(c("pause"),this._readableState.flowing=!1,this.emit("pause")),this},y.prototype.wrap=function(e){var t=this,r=this._readableState,n=!1;for(var i in e.on("end",function(){if(c("wrapped end"),r.decoder&&!r.ended){var e=r.decoder.end();e&&e.length&&t.push(e)}t.push(null)}),e.on("data",function(i){(c("wrapped data"),r.decoder&&(i=r.decoder.write(i)),!r.objectMode||null!==i&&void 0!==i)&&((r.objectMode||i&&i.length)&&(t.push(i)||(n=!0,e.pause())))}),e)void 0===this[i]&&"function"==typeof e[i]&&(this[i]=function(t){return function(){return e[t].apply(e,arguments)}}(i));for(var a=0;a<_.length;a++)e.on(_[a],this.emit.bind(this,_[a]));return this._read=function(t){c("wrapped _read",t),n&&(n=!1,e.resume())},this},y._fromList=I}).call(this,r(0),r(3))},function(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(e,t){if(void 0===e)throw"dicomParser.readPart10Header: missing required parameter 'byteArray'";var r=new n.default(a.default,e);return function(){!function(){if(r.seek(128),"DICM"!==r.readFixedString(4))throw"dicomParser.readPart10Header: DICM prefix not found at location 132 - this is not a valid DICOM P10 file."}();var e=[],t={};for(;r.position<r.byteArray.length;){var n=r.position,s=(0,o.default)(r,e);if(s.tag>"x0002ffff"){r.position=n;break}s.parser=a.default,t[s.tag]=s}var f=new i.default(r.byteArrayParser,r.byteArray,t);return f.warnings=r.warnings,f.position=r.position,f}()};var n=s(r(12)),i=s(r(7)),a=s(r(21)),o=s(r(15));function s(e){return e&&e.__esModule?e:{default:e}}},function(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default={readUint16:function(e,t){if(t<0)throw"bigEndianByteArrayParser.readUint16: position cannot be less than 0";if(t+2>e.length)throw"bigEndianByteArrayParser.readUint16: attempt to read past end of buffer";return(e[t]<<8)+e[t+1]},readInt16:function(e,t){if(t<0)throw"bigEndianByteArrayParser.readInt16: position cannot be less than 0";if(t+2>e.length)throw"bigEndianByteArrayParser.readInt16: attempt to read past end of buffer";var r=(e[t]<<8)+e[t+1];return 32768&r&&(r=r-65535-1),r},readUint32:function(e,t){if(t<0)throw"bigEndianByteArrayParser.readUint32: position cannot be less than 0";if(t+4>e.length)throw"bigEndianByteArrayParser.readUint32: attempt to read past end of buffer";return 256*(256*(256*e[t]+e[t+1])+e[t+2])+e[t+3]},readInt32:function(e,t){if(t<0)throw"bigEndianByteArrayParser.readInt32: position cannot be less than 0";if(t+4>e.length)throw"bigEndianByteArrayParser.readInt32: attempt to read past end of buffer";return(e[t]<<24)+(e[t+1]<<16)+(e[t+2]<<8)+e[t+3]},readFloat:function(e,t){if(t<0)throw"bigEndianByteArrayParser.readFloat: position cannot be less than 0";if(t+4>e.length)throw"bigEndianByteArrayParser.readFloat: attempt to read past end of buffer";var r=new Uint8Array(4);return r[3]=e[t],r[2]=e[t+1],r[1]=e[t+2],r[0]=e[t+3],new Float32Array(r.buffer)[0]},readDouble:function(e,t){if(t<0)throw"bigEndianByteArrayParser.readDouble: position cannot be less than 0";if(t+8>e.length)throw"bigEndianByteArrayParser.readDouble: attempt to read past end of buffer";var r=new Uint8Array(8);return r[7]=e[t],r[6]=e[t+1],r[5]=e[t+2],r[4]=e[t+3],r[3]=e[t+4],r[2]=e[t+5],r[1]=e[t+6],r[0]=e[t+7],new Float64Array(r.buffer)[0]}}},function(e,t){var r={}.toString;e.exports=Array.isArray||function(e){return"[object Array]"==r.call(e)}},function(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(e,t,r){if(void 0===e)throw"dicomParser.readSequenceItemsImplicit: missing required parameter 'byteStream'";if(void 0===t)throw"dicomParser.readSequenceItemsImplicit: missing required parameter 'element'";t.items=[],4294967295===t.length?function(e,t,r){for(;e.position+4<=e.byteArray.length;){var n=(0,o.default)(e);if(e.seek(-4),"xfffee0dd"===n)return t.length=e.position-t.dataOffset,e.seek(8),t;var i=l(e,r);t.items.push(i)}e.warnings.push("eof encountered before finding sequence delimiter in sequence of undefined length"),t.length=e.byteArray.length-t.dataOffset}(e,t,r):function(e,t,r){var n=t.dataOffset+t.length;for(;e.position<n;){var i=l(e,r);t.items.push(i)}}(e,t,r)};var n=f(r(7)),i=f(r(23)),a=f(r(13)),o=f(r(4)),s=function(e){if(e&&e.__esModule)return e;var t={};if(null!=e)for(var r in e)Object.prototype.hasOwnProperty.call(e,r)&&(t[r]=e[r]);return t.default=e,t}(r(16));function f(e){return e&&e.__esModule?e:{default:e}}function l(e,t){var r=(0,a.default)(e);return 4294967295===r.length?(r.hadUndefinedLength=!0,r.dataSet=function(e,t){for(var r={};e.position<e.byteArray.length;){var a=(0,i.default)(e,void 0,t);if(r[a.tag]=a,"xfffee00d"===a.tag)return new n.default(e.byteArrayParser,e.byteArray,r)}return e.warnings.push("eof encountered before finding sequence item delimiter in sequence item of undefined length"),new n.default(e.byteArrayParser,e.byteArray,r)}(e,t),r.length=e.position-r.dataOffset):(r.dataSet=new n.default(e.byteArrayParser,e.byteArray,{}),s.parseDicomDataSetImplicit(r.dataSet,e,e.position+r.length,{vrCallback:t})),r}},function(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(e,t,r){if(void 0===e)throw"dicomParser.readSequenceItemsExplicit: missing required parameter 'byteStream'";if(void 0===t)throw"dicomParser.readSequenceItemsExplicit: missing required parameter 'element'";t.items=[],4294967295===t.length?function(e,t,r){for(;e.position+4<=e.byteArray.length;){var n=(0,o.default)(e);if(e.seek(-4),"xfffee0dd"===n)return t.length=e.position-t.dataOffset,e.seek(8),t;var i=l(e,r);t.items.push(i)}r.push("eof encountered before finding sequence delimitation tag while reading sequence of undefined length"),t.length=e.position-t.dataOffset}(e,t,r):function(e,t,r){var n=t.dataOffset+t.length;for(;e.position<n;){var i=l(e,r);t.items.push(i)}}(e,t,r)};var n=f(r(7)),i=f(r(15)),a=f(r(13)),o=f(r(4)),s=function(e){if(e&&e.__esModule)return e;var t={};if(null!=e)for(var r in e)Object.prototype.hasOwnProperty.call(e,r)&&(t[r]=e[r]);return t.default=e,t}(r(16));function f(e){return e&&e.__esModule?e:{default:e}}function l(e,t){var r=(0,a.default)(e);return 4294967295===r.length?(r.hadUndefinedLength=!0,r.dataSet=function(e,t){for(var r={};e.position<e.byteArray.length;){var a=(0,i.default)(e,t);if(r[a.tag]=a,"xfffee00d"===a.tag)return new n.default(e.byteArrayParser,e.byteArray,r)}return t.push("eof encountered before finding item delimiter tag while reading sequence item of undefined length"),new n.default(e.byteArrayParser,e.byteArray,r)}(e,t),r.length=e.position-r.dataOffset):(r.dataSet=new n.default(e.byteArrayParser,e.byteArray,{}),s.parseDicomDataSetExplicit(r.dataSet,e,e.position+r.length)),r}},function(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(e,t){if(void 0===e)throw"dicomParser.findAndSetUNElementLength: missing required parameter 'byteStream'";var r=e.byteArray.length-8;for(;e.position<=r;){var n=e.readUint16();if(65534===n){var i=e.readUint16();if(57565===i){var a=e.readUint32();return 0!==a&&e.warnings("encountered non zero length following item delimiter at position "+(e.position-4)+" while reading element of undefined length with tag "+t.tag),void(t.length=e.position-t.dataOffset)}}}t.length=e.byteArray.length-t.dataOffset,e.seek(e.byteArray.length-e.position)}},function(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(e,t,r){if(void 0===e)throw"dicomParser.findEndOfEncapsulatedElement: missing required parameter 'byteStream'";if(void 0===t)throw"dicomParser.findEndOfEncapsulatedElement: missing required parameter 'element'";if(t.encapsulatedPixelData=!0,t.basicOffsetTable=[],t.fragments=[],"xfffee000"!==(0,a.default)(e))throw"dicomParser.findEndOfEncapsulatedElement: basic offset table not found";for(var n=e.readUint32()/4,i=0;i<n;i++){var o=e.readUint32();t.basicOffsetTable.push(o)}var s=e.position;for(;e.position<e.byteArray.length;){var f=(0,a.default)(e),l=e.readUint32();if("xfffee0dd"===f)return e.seek(l),void(t.length=e.position-t.dataOffset);if("xfffee000"!==f)return r&&r.push("unexpected tag "+f+" while searching for end of pixel data element with undefined length"),l>e.byteArray.length-e.position&&(l=e.byteArray.length-e.position),t.fragments.push({offset:e.position-s-8,position:e.position,length:l}),e.seek(l),void(t.length=e.position-t.dataOffset);t.fragments.push({offset:e.position-s-8,position:e.position,length:l}),e.seek(l)}r&&r.push("pixel data element "+t.tag+" missing sequence delimiter tag xfffee0dd")};var n,i=r(4),a=(n=i)&&n.__esModule?n:{default:n}},function(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(e,t){if(void 0===e||void 0===t)throw"dicomParser.explicitElementToString: missing required parameters";if(void 0===t.vr)throw"dicomParser.explicitElementToString: cannot convert implicit element to string";var r,i=t.vr,a=t.tag;function o(t,r){for(var n="",i=0;i<t;i++)0!==i&&(n+="/"),n+=r.call(e,a,i).toString();return n}if(!0===n.isStringVr(i))r=e.string(a);else{if("AT"===i){var s=e.uint32(a);if(void 0===s)return;return s<0&&(s=4294967295+s+1),"x"+s.toString(16).toUpperCase()}"US"===i?r=o(t.length/2,e.uint16):"SS"===i?r=o(t.length/2,e.int16):"UL"===i?r=o(t.length/4,e.uint32):"SL"===i?r=o(t.length/4,e.int32):"FD"===i?r=o(t.length/8,e.double):"FL"===i&&(r=o(t.length/4,e.float))}return r};var n=function(e){if(e&&e.__esModule)return e;var t={};if(null!=e)for(var r in e)Object.prototype.hasOwnProperty.call(e,r)&&(t[r]=e[r]);return t.default=e,t}(r(25))},function(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(e,t,r){o||(o=!0,console&&console.log&&console.log("WARNING: dicomParser.readEncapsulatedPixelData() has been deprecated"));if(void 0===e)throw"dicomParser.readEncapsulatedPixelData: missing required parameter 'dataSet'";if(void 0===t)throw"dicomParser.readEncapsulatedPixelData: missing required parameter 'element'";if(void 0===r)throw"dicomParser.readEncapsulatedPixelData: missing required parameter 'frame'";if("x7fe00010"!==t.tag)throw"dicomParser.readEncapsulatedPixelData: parameter 'element' refers to non pixel data tag (expected tag = x7fe00010)";if(!0!==t.encapsulatedPixelData)throw"dicomParser.readEncapsulatedPixelData: parameter 'element' refers to pixel data element that does not have encapsulated pixel data";if(!0!==t.hadUndefinedLength)throw"dicomParser.readEncapsulatedPixelData: parameter 'element' refers to pixel data element that does not have encapsulated pixel data";if(void 0===t.basicOffsetTable)throw"dicomParser.readEncapsulatedPixelData: parameter 'element' refers to pixel data element that does not have encapsulated pixel data";if(void 0===t.fragments)throw"dicomParser.readEncapsulatedPixelData: parameter 'element' refers to pixel data element that does not have encapsulated pixel data";if(r<0)throw"dicomParser.readEncapsulatedPixelData: parameter 'frame' must be >= 0";if(0!==t.basicOffsetTable.length)return(0,n.default)(e,t,r);return(0,i.default)(e,t,0,t.fragments.length)};var n=a(r(26)),i=a(r(17));function a(e){return e&&e.__esModule?e:{default:e}}var o=!1},function(e,t,r){"use strict";e.exports={Z_NO_FLUSH:0,Z_PARTIAL_FLUSH:1,Z_SYNC_FLUSH:2,Z_FULL_FLUSH:3,Z_FINISH:4,Z_BLOCK:5,Z_TREES:6,Z_OK:0,Z_STREAM_END:1,Z_NEED_DICT:2,Z_ERRNO:-1,Z_STREAM_ERROR:-2,Z_DATA_ERROR:-3,Z_BUF_ERROR:-5,Z_NO_COMPRESSION:0,Z_BEST_SPEED:1,Z_BEST_COMPRESSION:9,Z_DEFAULT_COMPRESSION:-1,Z_FILTERED:1,Z_HUFFMAN_ONLY:2,Z_RLE:3,Z_FIXED:4,Z_DEFAULT_STRATEGY:0,Z_BINARY:0,Z_TEXT:1,Z_UNKNOWN:2,Z_DEFLATED:8}},function(e,t,r){"use strict";var n=r(8),i=[3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258,0,0],a=[16,16,16,16,16,16,16,16,17,17,17,17,18,18,18,18,19,19,19,19,20,20,20,20,21,21,21,21,16,72,78],o=[1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577,0,0],s=[16,16,16,16,17,17,18,18,19,19,20,20,21,21,22,22,23,23,24,24,25,25,26,26,27,27,28,28,29,29,64,64];e.exports=function(e,t,r,f,l,u,h,d){var c,p,g,m,_,b,y,v,w,E=d.bits,x=0,k=0,S=0,A=0,P=0,O=0,T=0,R=0,I=0,D=0,L=null,F=0,U=new n.Buf16(16),B=new n.Buf16(16),M=null,N=0;for(x=0;x<=15;x++)U[x]=0;for(k=0;k<f;k++)U[t[r+k]]++;for(P=E,A=15;A>=1&&0===U[A];A--);if(P>A&&(P=A),0===A)return l[u++]=20971520,l[u++]=20971520,d.bits=1,0;for(S=1;S<A&&0===U[S];S++);for(P<S&&(P=S),R=1,x=1;x<=15;x++)if(R<<=1,(R-=U[x])<0)return-1;if(R>0&&(0===e||1!==A))return-1;for(B[1]=0,x=1;x<15;x++)B[x+1]=B[x]+U[x];for(k=0;k<f;k++)0!==t[r+k]&&(h[B[t[r+k]]++]=k);if(0===e?(L=M=h,b=19):1===e?(L=i,F-=257,M=a,N-=257,b=256):(L=o,M=s,b=-1),D=0,k=0,x=S,_=u,O=P,T=0,g=-1,m=(I=1<<P)-1,1===e&&I>852||2===e&&I>592)return 1;for(;;){y=x-T,h[k]<b?(v=0,w=h[k]):h[k]>b?(v=M[N+h[k]],w=L[F+h[k]]):(v=96,w=0),c=1<<x-T,S=p=1<<O;do{l[_+(D>>T)+(p-=c)]=y<<24|v<<16|w|0}while(0!==p);for(c=1<<x-1;D&c;)c>>=1;if(0!==c?(D&=c-1,D+=c):D=0,k++,0==--U[x]){if(x===A)break;x=t[r+h[k]]}if(x>P&&(D&m)!==g){for(0===T&&(T=P),_+=S,R=1<<(O=x-T);O+T<A&&!((R-=U[O+T])<=0);)O++,R<<=1;if(I+=1<<O,1===e&&I>852||2===e&&I>592)return 1;l[g=D&m]=P<<24|O<<16|_-u|0}}return 0!==D&&(l[_+D]=x-T<<24|64<<16|0),d.bits=P,0}},function(e,t,r){"use strict";e.exports=function(e,t){var r,n,i,a,o,s,f,l,u,h,d,c,p,g,m,_,b,y,v,w,E,x,k,S,A;r=e.state,n=e.next_in,S=e.input,i=n+(e.avail_in-5),a=e.next_out,A=e.output,o=a-(t-e.avail_out),s=a+(e.avail_out-257),f=r.dmax,l=r.wsize,u=r.whave,h=r.wnext,d=r.window,c=r.hold,p=r.bits,g=r.lencode,m=r.distcode,_=(1<<r.lenbits)-1,b=(1<<r.distbits)-1;e:do{p<15&&(c+=S[n++]<<p,p+=8,c+=S[n++]<<p,p+=8),y=g[c&_];t:for(;;){if(c>>>=v=y>>>24,p-=v,0===(v=y>>>16&255))A[a++]=65535&y;else{if(!(16&v)){if(0==(64&v)){y=g[(65535&y)+(c&(1<<v)-1)];continue t}if(32&v){r.mode=12;break e}e.msg="invalid literal/length code",r.mode=30;break e}w=65535&y,(v&=15)&&(p<v&&(c+=S[n++]<<p,p+=8),w+=c&(1<<v)-1,c>>>=v,p-=v),p<15&&(c+=S[n++]<<p,p+=8,c+=S[n++]<<p,p+=8),y=m[c&b];r:for(;;){if(c>>>=v=y>>>24,p-=v,!(16&(v=y>>>16&255))){if(0==(64&v)){y=m[(65535&y)+(c&(1<<v)-1)];continue r}e.msg="invalid distance code",r.mode=30;break e}if(E=65535&y,p<(v&=15)&&(c+=S[n++]<<p,(p+=8)<v&&(c+=S[n++]<<p,p+=8)),(E+=c&(1<<v)-1)>f){e.msg="invalid distance too far back",r.mode=30;break e}if(c>>>=v,p-=v,E>(v=a-o)){if((v=E-v)>u&&r.sane){e.msg="invalid distance too far back",r.mode=30;break e}if(x=0,k=d,0===h){if(x+=l-v,v<w){w-=v;do{A[a++]=d[x++]}while(--v);x=a-E,k=A}}else if(h<v){if(x+=l+h-v,(v-=h)<w){w-=v;do{A[a++]=d[x++]}while(--v);if(x=0,h<w){w-=v=h;do{A[a++]=d[x++]}while(--v);x=a-E,k=A}}}else if(x+=h-v,v<w){w-=v;do{A[a++]=d[x++]}while(--v);x=a-E,k=A}for(;w>2;)A[a++]=k[x++],A[a++]=k[x++],A[a++]=k[x++],w-=3;w&&(A[a++]=k[x++],w>1&&(A[a++]=k[x++]))}else{x=a-E;do{A[a++]=A[x++],A[a++]=A[x++],A[a++]=A[x++],w-=3}while(w>2);w&&(A[a++]=A[x++],w>1&&(A[a++]=A[x++]))}break}}break}}while(n<i&&a<s);n-=w=p>>3,c&=(1<<(p-=w<<3))-1,e.next_in=n,e.next_out=a,e.avail_in=n<i?i-n+5:5-(n-i),e.avail_out=a<s?s-a+257:257-(a-s),r.hold=c,r.bits=p}},function(e,t,r){"use strict";var n=r(8),i=r(28),a=r(27),o=r(47),s=r(46),f=0,l=1,u=2,h=4,d=5,c=6,p=0,g=1,m=2,_=-2,b=-3,y=-4,v=-5,w=8,E=1,x=2,k=3,S=4,A=5,P=6,O=7,T=8,R=9,I=10,D=11,L=12,F=13,U=14,B=15,M=16,N=17,j=18,z=19,Z=20,C=21,q=22,Y=23,W=24,H=25,G=26,V=27,K=28,J=29,X=30,$=31,Q=32,ee=852,te=592,re=15;function ne(e){return(e>>>24&255)+(e>>>8&65280)+((65280&e)<<8)+((255&e)<<24)}function ie(e){var t;return e&&e.state?(t=e.state,e.total_in=e.total_out=t.total=0,e.msg="",t.wrap&&(e.adler=1&t.wrap),t.mode=E,t.last=0,t.havedict=0,t.dmax=32768,t.head=null,t.hold=0,t.bits=0,t.lencode=t.lendyn=new n.Buf32(ee),t.distcode=t.distdyn=new n.Buf32(te),t.sane=1,t.back=-1,p):_}function ae(e){var t;return e&&e.state?((t=e.state).wsize=0,t.whave=0,t.wnext=0,ie(e)):_}function oe(e,t){var r,n;return e&&e.state?(n=e.state,t<0?(r=0,t=-t):(r=1+(t>>4),t<48&&(t&=15)),t&&(t<8||t>15)?_:(null!==n.window&&n.wbits!==t&&(n.window=null),n.wrap=r,n.wbits=t,ae(e))):_}function se(e,t){var r,i;return e?(i=new function(){this.mode=0,this.last=!1,this.wrap=0,this.havedict=!1,this.flags=0,this.dmax=0,this.check=0,this.total=0,this.head=null,this.wbits=0,this.wsize=0,this.whave=0,this.wnext=0,this.window=null,this.hold=0,this.bits=0,this.length=0,this.offset=0,this.extra=0,this.lencode=null,this.distcode=null,this.lenbits=0,this.distbits=0,this.ncode=0,this.nlen=0,this.ndist=0,this.have=0,this.next=null,this.lens=new n.Buf16(320),this.work=new n.Buf16(288),this.lendyn=null,this.distdyn=null,this.sane=0,this.back=0,this.was=0},e.state=i,i.window=null,(r=oe(e,t))!==p&&(e.state=null),r):_}var fe,le,ue=!0;function he(e){if(ue){var t;for(fe=new n.Buf32(512),le=new n.Buf32(32),t=0;t<144;)e.lens[t++]=8;for(;t<256;)e.lens[t++]=9;for(;t<280;)e.lens[t++]=7;for(;t<288;)e.lens[t++]=8;for(s(l,e.lens,0,288,fe,0,e.work,{bits:9}),t=0;t<32;)e.lens[t++]=5;s(u,e.lens,0,32,le,0,e.work,{bits:5}),ue=!1}e.lencode=fe,e.lenbits=9,e.distcode=le,e.distbits=5}function de(e,t,r,i){var a,o=e.state;return null===o.window&&(o.wsize=1<<o.wbits,o.wnext=0,o.whave=0,o.window=new n.Buf8(o.wsize)),i>=o.wsize?(n.arraySet(o.window,t,r-o.wsize,o.wsize,0),o.wnext=0,o.whave=o.wsize):((a=o.wsize-o.wnext)>i&&(a=i),n.arraySet(o.window,t,r-i,a,o.wnext),(i-=a)?(n.arraySet(o.window,t,r-i,i,0),o.wnext=i,o.whave=o.wsize):(o.wnext+=a,o.wnext===o.wsize&&(o.wnext=0),o.whave<o.wsize&&(o.whave+=a))),0}t.inflateReset=ae,t.inflateReset2=oe,t.inflateResetKeep=ie,t.inflateInit=function(e){return se(e,re)},t.inflateInit2=se,t.inflate=function(e,t){var r,ee,te,re,ie,ae,oe,se,fe,le,ue,ce,pe,ge,me,_e,be,ye,ve,we,Ee,xe,ke,Se,Ae=0,Pe=new n.Buf8(4),Oe=[16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15];if(!e||!e.state||!e.output||!e.input&&0!==e.avail_in)return _;(r=e.state).mode===L&&(r.mode=F),ie=e.next_out,te=e.output,oe=e.avail_out,re=e.next_in,ee=e.input,ae=e.avail_in,se=r.hold,fe=r.bits,le=ae,ue=oe,xe=p;e:for(;;)switch(r.mode){case E:if(0===r.wrap){r.mode=F;break}for(;fe<16;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}if(2&r.wrap&&35615===se){r.check=0,Pe[0]=255&se,Pe[1]=se>>>8&255,r.check=a(r.check,Pe,2,0),se=0,fe=0,r.mode=x;break}if(r.flags=0,r.head&&(r.head.done=!1),!(1&r.wrap)||(((255&se)<<8)+(se>>8))%31){e.msg="incorrect header check",r.mode=X;break}if((15&se)!==w){e.msg="unknown compression method",r.mode=X;break}if(fe-=4,Ee=8+(15&(se>>>=4)),0===r.wbits)r.wbits=Ee;else if(Ee>r.wbits){e.msg="invalid window size",r.mode=X;break}r.dmax=1<<Ee,e.adler=r.check=1,r.mode=512&se?I:L,se=0,fe=0;break;case x:for(;fe<16;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}if(r.flags=se,(255&r.flags)!==w){e.msg="unknown compression method",r.mode=X;break}if(57344&r.flags){e.msg="unknown header flags set",r.mode=X;break}r.head&&(r.head.text=se>>8&1),512&r.flags&&(Pe[0]=255&se,Pe[1]=se>>>8&255,r.check=a(r.check,Pe,2,0)),se=0,fe=0,r.mode=k;case k:for(;fe<32;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}r.head&&(r.head.time=se),512&r.flags&&(Pe[0]=255&se,Pe[1]=se>>>8&255,Pe[2]=se>>>16&255,Pe[3]=se>>>24&255,r.check=a(r.check,Pe,4,0)),se=0,fe=0,r.mode=S;case S:for(;fe<16;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}r.head&&(r.head.xflags=255&se,r.head.os=se>>8),512&r.flags&&(Pe[0]=255&se,Pe[1]=se>>>8&255,r.check=a(r.check,Pe,2,0)),se=0,fe=0,r.mode=A;case A:if(1024&r.flags){for(;fe<16;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}r.length=se,r.head&&(r.head.extra_len=se),512&r.flags&&(Pe[0]=255&se,Pe[1]=se>>>8&255,r.check=a(r.check,Pe,2,0)),se=0,fe=0}else r.head&&(r.head.extra=null);r.mode=P;case P:if(1024&r.flags&&((ce=r.length)>ae&&(ce=ae),ce&&(r.head&&(Ee=r.head.extra_len-r.length,r.head.extra||(r.head.extra=new Array(r.head.extra_len)),n.arraySet(r.head.extra,ee,re,ce,Ee)),512&r.flags&&(r.check=a(r.check,ee,ce,re)),ae-=ce,re+=ce,r.length-=ce),r.length))break e;r.length=0,r.mode=O;case O:if(2048&r.flags){if(0===ae)break e;ce=0;do{Ee=ee[re+ce++],r.head&&Ee&&r.length<65536&&(r.head.name+=String.fromCharCode(Ee))}while(Ee&&ce<ae);if(512&r.flags&&(r.check=a(r.check,ee,ce,re)),ae-=ce,re+=ce,Ee)break e}else r.head&&(r.head.name=null);r.length=0,r.mode=T;case T:if(4096&r.flags){if(0===ae)break e;ce=0;do{Ee=ee[re+ce++],r.head&&Ee&&r.length<65536&&(r.head.comment+=String.fromCharCode(Ee))}while(Ee&&ce<ae);if(512&r.flags&&(r.check=a(r.check,ee,ce,re)),ae-=ce,re+=ce,Ee)break e}else r.head&&(r.head.comment=null);r.mode=R;case R:if(512&r.flags){for(;fe<16;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}if(se!==(65535&r.check)){e.msg="header crc mismatch",r.mode=X;break}se=0,fe=0}r.head&&(r.head.hcrc=r.flags>>9&1,r.head.done=!0),e.adler=r.check=0,r.mode=L;break;case I:for(;fe<32;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}e.adler=r.check=ne(se),se=0,fe=0,r.mode=D;case D:if(0===r.havedict)return e.next_out=ie,e.avail_out=oe,e.next_in=re,e.avail_in=ae,r.hold=se,r.bits=fe,m;e.adler=r.check=1,r.mode=L;case L:if(t===d||t===c)break e;case F:if(r.last){se>>>=7&fe,fe-=7&fe,r.mode=V;break}for(;fe<3;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}switch(r.last=1&se,fe-=1,3&(se>>>=1)){case 0:r.mode=U;break;case 1:if(he(r),r.mode=Z,t===c){se>>>=2,fe-=2;break e}break;case 2:r.mode=N;break;case 3:e.msg="invalid block type",r.mode=X}se>>>=2,fe-=2;break;case U:for(se>>>=7&fe,fe-=7&fe;fe<32;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}if((65535&se)!=(se>>>16^65535)){e.msg="invalid stored block lengths",r.mode=X;break}if(r.length=65535&se,se=0,fe=0,r.mode=B,t===c)break e;case B:r.mode=M;case M:if(ce=r.length){if(ce>ae&&(ce=ae),ce>oe&&(ce=oe),0===ce)break e;n.arraySet(te,ee,re,ce,ie),ae-=ce,re+=ce,oe-=ce,ie+=ce,r.length-=ce;break}r.mode=L;break;case N:for(;fe<14;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}if(r.nlen=257+(31&se),se>>>=5,fe-=5,r.ndist=1+(31&se),se>>>=5,fe-=5,r.ncode=4+(15&se),se>>>=4,fe-=4,r.nlen>286||r.ndist>30){e.msg="too many length or distance symbols",r.mode=X;break}r.have=0,r.mode=j;case j:for(;r.have<r.ncode;){for(;fe<3;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}r.lens[Oe[r.have++]]=7&se,se>>>=3,fe-=3}for(;r.have<19;)r.lens[Oe[r.have++]]=0;if(r.lencode=r.lendyn,r.lenbits=7,ke={bits:r.lenbits},xe=s(f,r.lens,0,19,r.lencode,0,r.work,ke),r.lenbits=ke.bits,xe){e.msg="invalid code lengths set",r.mode=X;break}r.have=0,r.mode=z;case z:for(;r.have<r.nlen+r.ndist;){for(;_e=(Ae=r.lencode[se&(1<<r.lenbits)-1])>>>16&255,be=65535&Ae,!((me=Ae>>>24)<=fe);){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}if(be<16)se>>>=me,fe-=me,r.lens[r.have++]=be;else{if(16===be){for(Se=me+2;fe<Se;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}if(se>>>=me,fe-=me,0===r.have){e.msg="invalid bit length repeat",r.mode=X;break}Ee=r.lens[r.have-1],ce=3+(3&se),se>>>=2,fe-=2}else if(17===be){for(Se=me+3;fe<Se;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}fe-=me,Ee=0,ce=3+(7&(se>>>=me)),se>>>=3,fe-=3}else{for(Se=me+7;fe<Se;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}fe-=me,Ee=0,ce=11+(127&(se>>>=me)),se>>>=7,fe-=7}if(r.have+ce>r.nlen+r.ndist){e.msg="invalid bit length repeat",r.mode=X;break}for(;ce--;)r.lens[r.have++]=Ee}}if(r.mode===X)break;if(0===r.lens[256]){e.msg="invalid code -- missing end-of-block",r.mode=X;break}if(r.lenbits=9,ke={bits:r.lenbits},xe=s(l,r.lens,0,r.nlen,r.lencode,0,r.work,ke),r.lenbits=ke.bits,xe){e.msg="invalid literal/lengths set",r.mode=X;break}if(r.distbits=6,r.distcode=r.distdyn,ke={bits:r.distbits},xe=s(u,r.lens,r.nlen,r.ndist,r.distcode,0,r.work,ke),r.distbits=ke.bits,xe){e.msg="invalid distances set",r.mode=X;break}if(r.mode=Z,t===c)break e;case Z:r.mode=C;case C:if(ae>=6&&oe>=258){e.next_out=ie,e.avail_out=oe,e.next_in=re,e.avail_in=ae,r.hold=se,r.bits=fe,o(e,ue),ie=e.next_out,te=e.output,oe=e.avail_out,re=e.next_in,ee=e.input,ae=e.avail_in,se=r.hold,fe=r.bits,r.mode===L&&(r.back=-1);break}for(r.back=0;_e=(Ae=r.lencode[se&(1<<r.lenbits)-1])>>>16&255,be=65535&Ae,!((me=Ae>>>24)<=fe);){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}if(_e&&0==(240&_e)){for(ye=me,ve=_e,we=be;_e=(Ae=r.lencode[we+((se&(1<<ye+ve)-1)>>ye)])>>>16&255,be=65535&Ae,!(ye+(me=Ae>>>24)<=fe);){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}se>>>=ye,fe-=ye,r.back+=ye}if(se>>>=me,fe-=me,r.back+=me,r.length=be,0===_e){r.mode=G;break}if(32&_e){r.back=-1,r.mode=L;break}if(64&_e){e.msg="invalid literal/length code",r.mode=X;break}r.extra=15&_e,r.mode=q;case q:if(r.extra){for(Se=r.extra;fe<Se;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}r.length+=se&(1<<r.extra)-1,se>>>=r.extra,fe-=r.extra,r.back+=r.extra}r.was=r.length,r.mode=Y;case Y:for(;_e=(Ae=r.distcode[se&(1<<r.distbits)-1])>>>16&255,be=65535&Ae,!((me=Ae>>>24)<=fe);){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}if(0==(240&_e)){for(ye=me,ve=_e,we=be;_e=(Ae=r.distcode[we+((se&(1<<ye+ve)-1)>>ye)])>>>16&255,be=65535&Ae,!(ye+(me=Ae>>>24)<=fe);){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}se>>>=ye,fe-=ye,r.back+=ye}if(se>>>=me,fe-=me,r.back+=me,64&_e){e.msg="invalid distance code",r.mode=X;break}r.offset=be,r.extra=15&_e,r.mode=W;case W:if(r.extra){for(Se=r.extra;fe<Se;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}r.offset+=se&(1<<r.extra)-1,se>>>=r.extra,fe-=r.extra,r.back+=r.extra}if(r.offset>r.dmax){e.msg="invalid distance too far back",r.mode=X;break}r.mode=H;case H:if(0===oe)break e;if(ce=ue-oe,r.offset>ce){if((ce=r.offset-ce)>r.whave&&r.sane){e.msg="invalid distance too far back",r.mode=X;break}ce>r.wnext?(ce-=r.wnext,pe=r.wsize-ce):pe=r.wnext-ce,ce>r.length&&(ce=r.length),ge=r.window}else ge=te,pe=ie-r.offset,ce=r.length;ce>oe&&(ce=oe),oe-=ce,r.length-=ce;do{te[ie++]=ge[pe++]}while(--ce);0===r.length&&(r.mode=C);break;case G:if(0===oe)break e;te[ie++]=r.length,oe--,r.mode=C;break;case V:if(r.wrap){for(;fe<32;){if(0===ae)break e;ae--,se|=ee[re++]<<fe,fe+=8}if(ue-=oe,e.total_out+=ue,r.total+=ue,ue&&(e.adler=r.check=r.flags?a(r.check,te,ue,ie-ue):i(r.check,te,ue,ie-ue)),ue=oe,(r.flags?se:ne(se))!==r.check){e.msg="incorrect data check",r.mode=X;break}se=0,fe=0}r.mode=K;case K:if(r.wrap&&r.flags){for(;fe<32;){if(0===ae)break e;ae--,se+=ee[re++]<<fe,fe+=8}if(se!==(4294967295&r.total)){e.msg="incorrect length check",r.mode=X;break}se=0,fe=0}r.mode=J;case J:xe=g;break e;case X:xe=b;break e;case $:return y;case Q:default:return _}return e.next_out=ie,e.avail_out=oe,e.next_in=re,e.avail_in=ae,r.hold=se,r.bits=fe,(r.wsize||ue!==e.avail_out&&r.mode<X&&(r.mode<V||t!==h))&&de(e,e.output,e.next_out,ue-e.avail_out)?(r.mode=$,y):(le-=e.avail_in,ue-=e.avail_out,e.total_in+=le,e.total_out+=ue,r.total+=ue,r.wrap&&ue&&(e.adler=r.check=r.flags?a(r.check,te,ue,e.next_out-ue):i(r.check,te,ue,e.next_out-ue)),e.data_type=r.bits+(r.last?64:0)+(r.mode===L?128:0)+(r.mode===Z||r.mode===B?256:0),(0===le&&0===ue||t===h)&&xe===p&&(xe=v),xe)},t.inflateEnd=function(e){if(!e||!e.state)return _;var t=e.state;return t.window&&(t.window=null),e.state=null,p},t.inflateGetHeader=function(e,t){var r;return e&&e.state?0==(2&(r=e.state).wrap)?_:(r.head=t,t.done=!1,p):_},t.inflateSetDictionary=function(e,t){var r,n=t.length;return e&&e.state?0!==(r=e.state).wrap&&r.mode!==D?_:r.mode===D&&i(1,t,n,0)!==r.check?b:de(e,t,n,n)?(r.mode=$,y):(r.havedict=1,p):_},t.inflateInfo="pako inflate (from Nodeca project)"},function(e,t,r){"use strict";e.exports={2:"need dictionary",1:"stream end",0:"","-1":"file error","-2":"stream error","-3":"data error","-4":"insufficient memory","-5":"buffer error","-6":"incompatible version"}},function(e,t,r){"use strict";var n=r(8),i=4,a=0,o=1,s=2;function f(e){for(var t=e.length;--t>=0;)e[t]=0}var l=0,u=1,h=2,d=29,c=256,p=c+1+d,g=30,m=19,_=2*p+1,b=15,y=16,v=7,w=256,E=16,x=17,k=18,S=[0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0],A=[0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13],P=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2,3,7],O=[16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15],T=new Array(2*(p+2));f(T);var R=new Array(2*g);f(R);var I=new Array(512);f(I);var D=new Array(256);f(D);var L=new Array(d);f(L);var F,U,B,M=new Array(g);function N(e,t,r,n,i){this.static_tree=e,this.extra_bits=t,this.extra_base=r,this.elems=n,this.max_length=i,this.has_stree=e&&e.length}function j(e,t){this.dyn_tree=e,this.max_code=0,this.stat_desc=t}function z(e){return e<256?I[e]:I[256+(e>>>7)]}function Z(e,t){e.pending_buf[e.pending++]=255&t,e.pending_buf[e.pending++]=t>>>8&255}function C(e,t,r){e.bi_valid>y-r?(e.bi_buf|=t<<e.bi_valid&65535,Z(e,e.bi_buf),e.bi_buf=t>>y-e.bi_valid,e.bi_valid+=r-y):(e.bi_buf|=t<<e.bi_valid&65535,e.bi_valid+=r)}function q(e,t,r){C(e,r[2*t],r[2*t+1])}function Y(e,t){var r=0;do{r|=1&e,e>>>=1,r<<=1}while(--t>0);return r>>>1}function W(e,t,r){var n,i,a=new Array(b+1),o=0;for(n=1;n<=b;n++)a[n]=o=o+r[n-1]<<1;for(i=0;i<=t;i++){var s=e[2*i+1];0!==s&&(e[2*i]=Y(a[s]++,s))}}function H(e){var t;for(t=0;t<p;t++)e.dyn_ltree[2*t]=0;for(t=0;t<g;t++)e.dyn_dtree[2*t]=0;for(t=0;t<m;t++)e.bl_tree[2*t]=0;e.dyn_ltree[2*w]=1,e.opt_len=e.static_len=0,e.last_lit=e.matches=0}function G(e){e.bi_valid>8?Z(e,e.bi_buf):e.bi_valid>0&&(e.pending_buf[e.pending++]=e.bi_buf),e.bi_buf=0,e.bi_valid=0}function V(e,t,r,n){var i=2*t,a=2*r;return e[i]<e[a]||e[i]===e[a]&&n[t]<=n[r]}function K(e,t,r){for(var n=e.heap[r],i=r<<1;i<=e.heap_len&&(i<e.heap_len&&V(t,e.heap[i+1],e.heap[i],e.depth)&&i++,!V(t,n,e.heap[i],e.depth));)e.heap[r]=e.heap[i],r=i,i<<=1;e.heap[r]=n}function J(e,t,r){var n,i,a,o,s=0;if(0!==e.last_lit)do{n=e.pending_buf[e.d_buf+2*s]<<8|e.pending_buf[e.d_buf+2*s+1],i=e.pending_buf[e.l_buf+s],s++,0===n?q(e,i,t):(q(e,(a=D[i])+c+1,t),0!==(o=S[a])&&C(e,i-=L[a],o),q(e,a=z(--n),r),0!==(o=A[a])&&C(e,n-=M[a],o))}while(s<e.last_lit);q(e,w,t)}function X(e,t){var r,n,i,a=t.dyn_tree,o=t.stat_desc.static_tree,s=t.stat_desc.has_stree,f=t.stat_desc.elems,l=-1;for(e.heap_len=0,e.heap_max=_,r=0;r<f;r++)0!==a[2*r]?(e.heap[++e.heap_len]=l=r,e.depth[r]=0):a[2*r+1]=0;for(;e.heap_len<2;)a[2*(i=e.heap[++e.heap_len]=l<2?++l:0)]=1,e.depth[i]=0,e.opt_len--,s&&(e.static_len-=o[2*i+1]);for(t.max_code=l,r=e.heap_len>>1;r>=1;r--)K(e,a,r);i=f;do{r=e.heap[1],e.heap[1]=e.heap[e.heap_len--],K(e,a,1),n=e.heap[1],e.heap[--e.heap_max]=r,e.heap[--e.heap_max]=n,a[2*i]=a[2*r]+a[2*n],e.depth[i]=(e.depth[r]>=e.depth[n]?e.depth[r]:e.depth[n])+1,a[2*r+1]=a[2*n+1]=i,e.heap[1]=i++,K(e,a,1)}while(e.heap_len>=2);e.heap[--e.heap_max]=e.heap[1],function(e,t){var r,n,i,a,o,s,f=t.dyn_tree,l=t.max_code,u=t.stat_desc.static_tree,h=t.stat_desc.has_stree,d=t.stat_desc.extra_bits,c=t.stat_desc.extra_base,p=t.stat_desc.max_length,g=0;for(a=0;a<=b;a++)e.bl_count[a]=0;for(f[2*e.heap[e.heap_max]+1]=0,r=e.heap_max+1;r<_;r++)(a=f[2*f[2*(n=e.heap[r])+1]+1]+1)>p&&(a=p,g++),f[2*n+1]=a,n>l||(e.bl_count[a]++,o=0,n>=c&&(o=d[n-c]),s=f[2*n],e.opt_len+=s*(a+o),h&&(e.static_len+=s*(u[2*n+1]+o)));if(0!==g){do{for(a=p-1;0===e.bl_count[a];)a--;e.bl_count[a]--,e.bl_count[a+1]+=2,e.bl_count[p]--,g-=2}while(g>0);for(a=p;0!==a;a--)for(n=e.bl_count[a];0!==n;)(i=e.heap[--r])>l||(f[2*i+1]!==a&&(e.opt_len+=(a-f[2*i+1])*f[2*i],f[2*i+1]=a),n--)}}(e,t),W(a,l,e.bl_count)}function $(e,t,r){var n,i,a=-1,o=t[1],s=0,f=7,l=4;for(0===o&&(f=138,l=3),t[2*(r+1)+1]=65535,n=0;n<=r;n++)i=o,o=t[2*(n+1)+1],++s<f&&i===o||(s<l?e.bl_tree[2*i]+=s:0!==i?(i!==a&&e.bl_tree[2*i]++,e.bl_tree[2*E]++):s<=10?e.bl_tree[2*x]++:e.bl_tree[2*k]++,s=0,a=i,0===o?(f=138,l=3):i===o?(f=6,l=3):(f=7,l=4))}function Q(e,t,r){var n,i,a=-1,o=t[1],s=0,f=7,l=4;for(0===o&&(f=138,l=3),n=0;n<=r;n++)if(i=o,o=t[2*(n+1)+1],!(++s<f&&i===o)){if(s<l)do{q(e,i,e.bl_tree)}while(0!=--s);else 0!==i?(i!==a&&(q(e,i,e.bl_tree),s--),q(e,E,e.bl_tree),C(e,s-3,2)):s<=10?(q(e,x,e.bl_tree),C(e,s-3,3)):(q(e,k,e.bl_tree),C(e,s-11,7));s=0,a=i,0===o?(f=138,l=3):i===o?(f=6,l=3):(f=7,l=4)}}f(M);var ee=!1;function te(e,t,r,i){C(e,(l<<1)+(i?1:0),3),function(e,t,r,i){G(e),i&&(Z(e,r),Z(e,~r)),n.arraySet(e.pending_buf,e.window,t,r,e.pending),e.pending+=r}(e,t,r,!0)}t._tr_init=function(e){ee||(function(){var e,t,r,n,i,a=new Array(b+1);for(r=0,n=0;n<d-1;n++)for(L[n]=r,e=0;e<1<<S[n];e++)D[r++]=n;for(D[r-1]=n,i=0,n=0;n<16;n++)for(M[n]=i,e=0;e<1<<A[n];e++)I[i++]=n;for(i>>=7;n<g;n++)for(M[n]=i<<7,e=0;e<1<<A[n]-7;e++)I[256+i++]=n;for(t=0;t<=b;t++)a[t]=0;for(e=0;e<=143;)T[2*e+1]=8,e++,a[8]++;for(;e<=255;)T[2*e+1]=9,e++,a[9]++;for(;e<=279;)T[2*e+1]=7,e++,a[7]++;for(;e<=287;)T[2*e+1]=8,e++,a[8]++;for(W(T,p+1,a),e=0;e<g;e++)R[2*e+1]=5,R[2*e]=Y(e,5);F=new N(T,S,c+1,p,b),U=new N(R,A,0,g,b),B=new N(new Array(0),P,0,m,v)}(),ee=!0),e.l_desc=new j(e.dyn_ltree,F),e.d_desc=new j(e.dyn_dtree,U),e.bl_desc=new j(e.bl_tree,B),e.bi_buf=0,e.bi_valid=0,H(e)},t._tr_stored_block=te,t._tr_flush_block=function(e,t,r,n){var f,l,d=0;e.level>0?(e.strm.data_type===s&&(e.strm.data_type=function(e){var t,r=4093624447;for(t=0;t<=31;t++,r>>>=1)if(1&r&&0!==e.dyn_ltree[2*t])return a;if(0!==e.dyn_ltree[18]||0!==e.dyn_ltree[20]||0!==e.dyn_ltree[26])return o;for(t=32;t<c;t++)if(0!==e.dyn_ltree[2*t])return o;return a}(e)),X(e,e.l_desc),X(e,e.d_desc),d=function(e){var t;for($(e,e.dyn_ltree,e.l_desc.max_code),$(e,e.dyn_dtree,e.d_desc.max_code),X(e,e.bl_desc),t=m-1;t>=3&&0===e.bl_tree[2*O[t]+1];t--);return e.opt_len+=3*(t+1)+5+5+4,t}(e),f=e.opt_len+3+7>>>3,(l=e.static_len+3+7>>>3)<=f&&(f=l)):f=l=r+5,r+4<=f&&-1!==t?te(e,t,r,n):e.strategy===i||l===f?(C(e,(u<<1)+(n?1:0),3),J(e,T,R)):(C(e,(h<<1)+(n?1:0),3),function(e,t,r,n){var i;for(C(e,t-257,5),C(e,r-1,5),C(e,n-4,4),i=0;i<n;i++)C(e,e.bl_tree[2*O[i]+1],3);Q(e,e.dyn_ltree,t-1),Q(e,e.dyn_dtree,r-1)}(e,e.l_desc.max_code+1,e.d_desc.max_code+1,d+1),J(e,e.dyn_ltree,e.dyn_dtree)),H(e),n&&G(e)},t._tr_tally=function(e,t,r){return e.pending_buf[e.d_buf+2*e.last_lit]=t>>>8&255,e.pending_buf[e.d_buf+2*e.last_lit+1]=255&t,e.pending_buf[e.l_buf+e.last_lit]=255&r,e.last_lit++,0===t?e.dyn_ltree[2*r]++:(e.matches++,t--,e.dyn_ltree[2*(D[r]+c+1)]++,e.dyn_dtree[2*z(t)]++),e.last_lit===e.lit_bufsize-1},t._tr_align=function(e){C(e,u<<1,3),q(e,w,T),function(e){16===e.bi_valid?(Z(e,e.bi_buf),e.bi_buf=0,e.bi_valid=0):e.bi_valid>=8&&(e.pending_buf[e.pending++]=255&e.bi_buf,e.bi_buf>>=8,e.bi_valid-=8)}(e)}},function(e,t,r){"use strict";var n,i=r(8),a=r(50),o=r(28),s=r(27),f=r(49),l=0,u=1,h=3,d=4,c=5,p=0,g=1,m=-2,_=-3,b=-5,y=-1,v=1,w=2,E=3,x=4,k=0,S=2,A=8,P=9,O=15,T=8,R=286,I=30,D=19,L=2*R+1,F=15,U=3,B=258,M=B+U+1,N=32,j=42,z=69,Z=73,C=91,q=103,Y=113,W=666,H=1,G=2,V=3,K=4,J=3;function X(e,t){return e.msg=f[t],t}function $(e){return(e<<1)-(e>4?9:0)}function Q(e){for(var t=e.length;--t>=0;)e[t]=0}function ee(e){var t=e.state,r=t.pending;r>e.avail_out&&(r=e.avail_out),0!==r&&(i.arraySet(e.output,t.pending_buf,t.pending_out,r,e.next_out),e.next_out+=r,t.pending_out+=r,e.total_out+=r,e.avail_out-=r,t.pending-=r,0===t.pending&&(t.pending_out=0))}function te(e,t){a._tr_flush_block(e,e.block_start>=0?e.block_start:-1,e.strstart-e.block_start,t),e.block_start=e.strstart,ee(e.strm)}function re(e,t){e.pending_buf[e.pending++]=t}function ne(e,t){e.pending_buf[e.pending++]=t>>>8&255,e.pending_buf[e.pending++]=255&t}function ie(e,t){var r,n,i=e.max_chain_length,a=e.strstart,o=e.prev_length,s=e.nice_match,f=e.strstart>e.w_size-M?e.strstart-(e.w_size-M):0,l=e.window,u=e.w_mask,h=e.prev,d=e.strstart+B,c=l[a+o-1],p=l[a+o];e.prev_length>=e.good_match&&(i>>=2),s>e.lookahead&&(s=e.lookahead);do{if(l[(r=t)+o]===p&&l[r+o-1]===c&&l[r]===l[a]&&l[++r]===l[a+1]){a+=2,r++;do{}while(l[++a]===l[++r]&&l[++a]===l[++r]&&l[++a]===l[++r]&&l[++a]===l[++r]&&l[++a]===l[++r]&&l[++a]===l[++r]&&l[++a]===l[++r]&&l[++a]===l[++r]&&a<d);if(n=B-(d-a),a=d-B,n>o){if(e.match_start=t,o=n,n>=s)break;c=l[a+o-1],p=l[a+o]}}}while((t=h[t&u])>f&&0!=--i);return o<=e.lookahead?o:e.lookahead}function ae(e){var t,r,n,a,f,l,u,h,d,c,p=e.w_size;do{if(a=e.window_size-e.lookahead-e.strstart,e.strstart>=p+(p-M)){i.arraySet(e.window,e.window,p,p,0),e.match_start-=p,e.strstart-=p,e.block_start-=p,t=r=e.hash_size;do{n=e.head[--t],e.head[t]=n>=p?n-p:0}while(--r);t=r=p;do{n=e.prev[--t],e.prev[t]=n>=p?n-p:0}while(--r);a+=p}if(0===e.strm.avail_in)break;if(l=e.strm,u=e.window,h=e.strstart+e.lookahead,d=a,c=void 0,(c=l.avail_in)>d&&(c=d),r=0===c?0:(l.avail_in-=c,i.arraySet(u,l.input,l.next_in,c,h),1===l.state.wrap?l.adler=o(l.adler,u,c,h):2===l.state.wrap&&(l.adler=s(l.adler,u,c,h)),l.next_in+=c,l.total_in+=c,c),e.lookahead+=r,e.lookahead+e.insert>=U)for(f=e.strstart-e.insert,e.ins_h=e.window[f],e.ins_h=(e.ins_h<<e.hash_shift^e.window[f+1])&e.hash_mask;e.insert&&(e.ins_h=(e.ins_h<<e.hash_shift^e.window[f+U-1])&e.hash_mask,e.prev[f&e.w_mask]=e.head[e.ins_h],e.head[e.ins_h]=f,f++,e.insert--,!(e.lookahead+e.insert<U)););}while(e.lookahead<M&&0!==e.strm.avail_in)}function oe(e,t){for(var r,n;;){if(e.lookahead<M){if(ae(e),e.lookahead<M&&t===l)return H;if(0===e.lookahead)break}if(r=0,e.lookahead>=U&&(e.ins_h=(e.ins_h<<e.hash_shift^e.window[e.strstart+U-1])&e.hash_mask,r=e.prev[e.strstart&e.w_mask]=e.head[e.ins_h],e.head[e.ins_h]=e.strstart),0!==r&&e.strstart-r<=e.w_size-M&&(e.match_length=ie(e,r)),e.match_length>=U)if(n=a._tr_tally(e,e.strstart-e.match_start,e.match_length-U),e.lookahead-=e.match_length,e.match_length<=e.max_lazy_match&&e.lookahead>=U){e.match_length--;do{e.strstart++,e.ins_h=(e.ins_h<<e.hash_shift^e.window[e.strstart+U-1])&e.hash_mask,r=e.prev[e.strstart&e.w_mask]=e.head[e.ins_h],e.head[e.ins_h]=e.strstart}while(0!=--e.match_length);e.strstart++}else e.strstart+=e.match_length,e.match_length=0,e.ins_h=e.window[e.strstart],e.ins_h=(e.ins_h<<e.hash_shift^e.window[e.strstart+1])&e.hash_mask;else n=a._tr_tally(e,0,e.window[e.strstart]),e.lookahead--,e.strstart++;if(n&&(te(e,!1),0===e.strm.avail_out))return H}return e.insert=e.strstart<U-1?e.strstart:U-1,t===d?(te(e,!0),0===e.strm.avail_out?V:K):e.last_lit&&(te(e,!1),0===e.strm.avail_out)?H:G}function se(e,t){for(var r,n,i;;){if(e.lookahead<M){if(ae(e),e.lookahead<M&&t===l)return H;if(0===e.lookahead)break}if(r=0,e.lookahead>=U&&(e.ins_h=(e.ins_h<<e.hash_shift^e.window[e.strstart+U-1])&e.hash_mask,r=e.prev[e.strstart&e.w_mask]=e.head[e.ins_h],e.head[e.ins_h]=e.strstart),e.prev_length=e.match_length,e.prev_match=e.match_start,e.match_length=U-1,0!==r&&e.prev_length<e.max_lazy_match&&e.strstart-r<=e.w_size-M&&(e.match_length=ie(e,r),e.match_length<=5&&(e.strategy===v||e.match_length===U&&e.strstart-e.match_start>4096)&&(e.match_length=U-1)),e.prev_length>=U&&e.match_length<=e.prev_length){i=e.strstart+e.lookahead-U,n=a._tr_tally(e,e.strstart-1-e.prev_match,e.prev_length-U),e.lookahead-=e.prev_length-1,e.prev_length-=2;do{++e.strstart<=i&&(e.ins_h=(e.ins_h<<e.hash_shift^e.window[e.strstart+U-1])&e.hash_mask,r=e.prev[e.strstart&e.w_mask]=e.head[e.ins_h],e.head[e.ins_h]=e.strstart)}while(0!=--e.prev_length);if(e.match_available=0,e.match_length=U-1,e.strstart++,n&&(te(e,!1),0===e.strm.avail_out))return H}else if(e.match_available){if((n=a._tr_tally(e,0,e.window[e.strstart-1]))&&te(e,!1),e.strstart++,e.lookahead--,0===e.strm.avail_out)return H}else e.match_available=1,e.strstart++,e.lookahead--}return e.match_available&&(n=a._tr_tally(e,0,e.window[e.strstart-1]),e.match_available=0),e.insert=e.strstart<U-1?e.strstart:U-1,t===d?(te(e,!0),0===e.strm.avail_out?V:K):e.last_lit&&(te(e,!1),0===e.strm.avail_out)?H:G}function fe(e,t,r,n,i){this.good_length=e,this.max_lazy=t,this.nice_length=r,this.max_chain=n,this.func=i}function le(e){var t;return e&&e.state?(e.total_in=e.total_out=0,e.data_type=S,(t=e.state).pending=0,t.pending_out=0,t.wrap<0&&(t.wrap=-t.wrap),t.status=t.wrap?j:Y,e.adler=2===t.wrap?0:1,t.last_flush=l,a._tr_init(t),p):X(e,m)}function ue(e){var t,r=le(e);return r===p&&((t=e.state).window_size=2*t.w_size,Q(t.head),t.max_lazy_match=n[t.level].max_lazy,t.good_match=n[t.level].good_length,t.nice_match=n[t.level].nice_length,t.max_chain_length=n[t.level].max_chain,t.strstart=0,t.block_start=0,t.lookahead=0,t.insert=0,t.match_length=t.prev_length=U-1,t.match_available=0,t.ins_h=0),r}function he(e,t,r,n,a,o){if(!e)return m;var s=1;if(t===y&&(t=6),n<0?(s=0,n=-n):n>15&&(s=2,n-=16),a<1||a>P||r!==A||n<8||n>15||t<0||t>9||o<0||o>x)return X(e,m);8===n&&(n=9);var f=new function(){this.strm=null,this.status=0,this.pending_buf=null,this.pending_buf_size=0,this.pending_out=0,this.pending=0,this.wrap=0,this.gzhead=null,this.gzindex=0,this.method=A,this.last_flush=-1,this.w_size=0,this.w_bits=0,this.w_mask=0,this.window=null,this.window_size=0,this.prev=null,this.head=null,this.ins_h=0,this.hash_size=0,this.hash_bits=0,this.hash_mask=0,this.hash_shift=0,this.block_start=0,this.match_length=0,this.prev_match=0,this.match_available=0,this.strstart=0,this.match_start=0,this.lookahead=0,this.prev_length=0,this.max_chain_length=0,this.max_lazy_match=0,this.level=0,this.strategy=0,this.good_match=0,this.nice_match=0,this.dyn_ltree=new i.Buf16(2*L),this.dyn_dtree=new i.Buf16(2*(2*I+1)),this.bl_tree=new i.Buf16(2*(2*D+1)),Q(this.dyn_ltree),Q(this.dyn_dtree),Q(this.bl_tree),this.l_desc=null,this.d_desc=null,this.bl_desc=null,this.bl_count=new i.Buf16(F+1),this.heap=new i.Buf16(2*R+1),Q(this.heap),this.heap_len=0,this.heap_max=0,this.depth=new i.Buf16(2*R+1),Q(this.depth),this.l_buf=0,this.lit_bufsize=0,this.last_lit=0,this.d_buf=0,this.opt_len=0,this.static_len=0,this.matches=0,this.insert=0,this.bi_buf=0,this.bi_valid=0};return e.state=f,f.strm=e,f.wrap=s,f.gzhead=null,f.w_bits=n,f.w_size=1<<f.w_bits,f.w_mask=f.w_size-1,f.hash_bits=a+7,f.hash_size=1<<f.hash_bits,f.hash_mask=f.hash_size-1,f.hash_shift=~~((f.hash_bits+U-1)/U),f.window=new i.Buf8(2*f.w_size),f.head=new i.Buf16(f.hash_size),f.prev=new i.Buf16(f.w_size),f.lit_bufsize=1<<a+6,f.pending_buf_size=4*f.lit_bufsize,f.pending_buf=new i.Buf8(f.pending_buf_size),f.d_buf=1*f.lit_bufsize,f.l_buf=3*f.lit_bufsize,f.level=t,f.strategy=o,f.method=r,ue(e)}n=[new fe(0,0,0,0,function(e,t){var r=65535;for(r>e.pending_buf_size-5&&(r=e.pending_buf_size-5);;){if(e.lookahead<=1){if(ae(e),0===e.lookahead&&t===l)return H;if(0===e.lookahead)break}e.strstart+=e.lookahead,e.lookahead=0;var n=e.block_start+r;if((0===e.strstart||e.strstart>=n)&&(e.lookahead=e.strstart-n,e.strstart=n,te(e,!1),0===e.strm.avail_out))return H;if(e.strstart-e.block_start>=e.w_size-M&&(te(e,!1),0===e.strm.avail_out))return H}return e.insert=0,t===d?(te(e,!0),0===e.strm.avail_out?V:K):(e.strstart>e.block_start&&(te(e,!1),e.strm.avail_out),H)}),new fe(4,4,8,4,oe),new fe(4,5,16,8,oe),new fe(4,6,32,32,oe),new fe(4,4,16,16,se),new fe(8,16,32,32,se),new fe(8,16,128,128,se),new fe(8,32,128,256,se),new fe(32,128,258,1024,se),new fe(32,258,258,4096,se)],t.deflateInit=function(e,t){return he(e,t,A,O,T,k)},t.deflateInit2=he,t.deflateReset=ue,t.deflateResetKeep=le,t.deflateSetHeader=function(e,t){return e&&e.state?2!==e.state.wrap?m:(e.state.gzhead=t,p):m},t.deflate=function(e,t){var r,i,o,f;if(!e||!e.state||t>c||t<0)return e?X(e,m):m;if(i=e.state,!e.output||!e.input&&0!==e.avail_in||i.status===W&&t!==d)return X(e,0===e.avail_out?b:m);if(i.strm=e,r=i.last_flush,i.last_flush=t,i.status===j)if(2===i.wrap)e.adler=0,re(i,31),re(i,139),re(i,8),i.gzhead?(re(i,(i.gzhead.text?1:0)+(i.gzhead.hcrc?2:0)+(i.gzhead.extra?4:0)+(i.gzhead.name?8:0)+(i.gzhead.comment?16:0)),re(i,255&i.gzhead.time),re(i,i.gzhead.time>>8&255),re(i,i.gzhead.time>>16&255),re(i,i.gzhead.time>>24&255),re(i,9===i.level?2:i.strategy>=w||i.level<2?4:0),re(i,255&i.gzhead.os),i.gzhead.extra&&i.gzhead.extra.length&&(re(i,255&i.gzhead.extra.length),re(i,i.gzhead.extra.length>>8&255)),i.gzhead.hcrc&&(e.adler=s(e.adler,i.pending_buf,i.pending,0)),i.gzindex=0,i.status=z):(re(i,0),re(i,0),re(i,0),re(i,0),re(i,0),re(i,9===i.level?2:i.strategy>=w||i.level<2?4:0),re(i,J),i.status=Y);else{var _=A+(i.w_bits-8<<4)<<8;_|=(i.strategy>=w||i.level<2?0:i.level<6?1:6===i.level?2:3)<<6,0!==i.strstart&&(_|=N),_+=31-_%31,i.status=Y,ne(i,_),0!==i.strstart&&(ne(i,e.adler>>>16),ne(i,65535&e.adler)),e.adler=1}if(i.status===z)if(i.gzhead.extra){for(o=i.pending;i.gzindex<(65535&i.gzhead.extra.length)&&(i.pending!==i.pending_buf_size||(i.gzhead.hcrc&&i.pending>o&&(e.adler=s(e.adler,i.pending_buf,i.pending-o,o)),ee(e),o=i.pending,i.pending!==i.pending_buf_size));)re(i,255&i.gzhead.extra[i.gzindex]),i.gzindex++;i.gzhead.hcrc&&i.pending>o&&(e.adler=s(e.adler,i.pending_buf,i.pending-o,o)),i.gzindex===i.gzhead.extra.length&&(i.gzindex=0,i.status=Z)}else i.status=Z;if(i.status===Z)if(i.gzhead.name){o=i.pending;do{if(i.pending===i.pending_buf_size&&(i.gzhead.hcrc&&i.pending>o&&(e.adler=s(e.adler,i.pending_buf,i.pending-o,o)),ee(e),o=i.pending,i.pending===i.pending_buf_size)){f=1;break}f=i.gzindex<i.gzhead.name.length?255&i.gzhead.name.charCodeAt(i.gzindex++):0,re(i,f)}while(0!==f);i.gzhead.hcrc&&i.pending>o&&(e.adler=s(e.adler,i.pending_buf,i.pending-o,o)),0===f&&(i.gzindex=0,i.status=C)}else i.status=C;if(i.status===C)if(i.gzhead.comment){o=i.pending;do{if(i.pending===i.pending_buf_size&&(i.gzhead.hcrc&&i.pending>o&&(e.adler=s(e.adler,i.pending_buf,i.pending-o,o)),ee(e),o=i.pending,i.pending===i.pending_buf_size)){f=1;break}f=i.gzindex<i.gzhead.comment.length?255&i.gzhead.comment.charCodeAt(i.gzindex++):0,re(i,f)}while(0!==f);i.gzhead.hcrc&&i.pending>o&&(e.adler=s(e.adler,i.pending_buf,i.pending-o,o)),0===f&&(i.status=q)}else i.status=q;if(i.status===q&&(i.gzhead.hcrc?(i.pending+2>i.pending_buf_size&&ee(e),i.pending+2<=i.pending_buf_size&&(re(i,255&e.adler),re(i,e.adler>>8&255),e.adler=0,i.status=Y)):i.status=Y),0!==i.pending){if(ee(e),0===e.avail_out)return i.last_flush=-1,p}else if(0===e.avail_in&&$(t)<=$(r)&&t!==d)return X(e,b);if(i.status===W&&0!==e.avail_in)return X(e,b);if(0!==e.avail_in||0!==i.lookahead||t!==l&&i.status!==W){var y=i.strategy===w?function(e,t){for(var r;;){if(0===e.lookahead&&(ae(e),0===e.lookahead)){if(t===l)return H;break}if(e.match_length=0,r=a._tr_tally(e,0,e.window[e.strstart]),e.lookahead--,e.strstart++,r&&(te(e,!1),0===e.strm.avail_out))return H}return e.insert=0,t===d?(te(e,!0),0===e.strm.avail_out?V:K):e.last_lit&&(te(e,!1),0===e.strm.avail_out)?H:G}(i,t):i.strategy===E?function(e,t){for(var r,n,i,o,s=e.window;;){if(e.lookahead<=B){if(ae(e),e.lookahead<=B&&t===l)return H;if(0===e.lookahead)break}if(e.match_length=0,e.lookahead>=U&&e.strstart>0&&(n=s[i=e.strstart-1])===s[++i]&&n===s[++i]&&n===s[++i]){o=e.strstart+B;do{}while(n===s[++i]&&n===s[++i]&&n===s[++i]&&n===s[++i]&&n===s[++i]&&n===s[++i]&&n===s[++i]&&n===s[++i]&&i<o);e.match_length=B-(o-i),e.match_length>e.lookahead&&(e.match_length=e.lookahead)}if(e.match_length>=U?(r=a._tr_tally(e,1,e.match_length-U),e.lookahead-=e.match_length,e.strstart+=e.match_length,e.match_length=0):(r=a._tr_tally(e,0,e.window[e.strstart]),e.lookahead--,e.strstart++),r&&(te(e,!1),0===e.strm.avail_out))return H}return e.insert=0,t===d?(te(e,!0),0===e.strm.avail_out?V:K):e.last_lit&&(te(e,!1),0===e.strm.avail_out)?H:G}(i,t):n[i.level].func(i,t);if(y!==V&&y!==K||(i.status=W),y===H||y===V)return 0===e.avail_out&&(i.last_flush=-1),p;if(y===G&&(t===u?a._tr_align(i):t!==c&&(a._tr_stored_block(i,0,0,!1),t===h&&(Q(i.head),0===i.lookahead&&(i.strstart=0,i.block_start=0,i.insert=0))),ee(e),0===e.avail_out))return i.last_flush=-1,p}return t!==d?p:i.wrap<=0?g:(2===i.wrap?(re(i,255&e.adler),re(i,e.adler>>8&255),re(i,e.adler>>16&255),re(i,e.adler>>24&255),re(i,255&e.total_in),re(i,e.total_in>>8&255),re(i,e.total_in>>16&255),re(i,e.total_in>>24&255)):(ne(i,e.adler>>>16),ne(i,65535&e.adler)),ee(e),i.wrap>0&&(i.wrap=-i.wrap),0!==i.pending?p:g)},t.deflateEnd=function(e){var t;return e&&e.state?(t=e.state.status)!==j&&t!==z&&t!==Z&&t!==C&&t!==q&&t!==Y&&t!==W?X(e,m):(e.state=null,t===Y?X(e,_):p):m},t.deflateSetDictionary=function(e,t){var r,n,a,s,f,l,u,h,d=t.length;if(!e||!e.state)return m;if(2===(s=(r=e.state).wrap)||1===s&&r.status!==j||r.lookahead)return m;for(1===s&&(e.adler=o(e.adler,t,d,0)),r.wrap=0,d>=r.w_size&&(0===s&&(Q(r.head),r.strstart=0,r.block_start=0,r.insert=0),h=new i.Buf8(r.w_size),i.arraySet(h,t,d-r.w_size,r.w_size,0),t=h,d=r.w_size),f=e.avail_in,l=e.next_in,u=e.input,e.avail_in=d,e.next_in=0,e.input=t,ae(r);r.lookahead>=U;){n=r.strstart,a=r.lookahead-(U-1);do{r.ins_h=(r.ins_h<<r.hash_shift^r.window[n+U-1])&r.hash_mask,r.prev[n&r.w_mask]=r.head[r.ins_h],r.head[r.ins_h]=n,n++}while(--a);r.strstart=n,r.lookahead=U-1,ae(r)}return r.strstart+=r.lookahead,r.block_start=r.strstart,r.insert=r.lookahead,r.lookahead=0,r.match_length=r.prev_length=U-1,r.match_available=0,e.next_in=l,e.input=u,e.avail_in=f,r.wrap=s,p},t.deflateInfo="pako deflate (from Nodeca project)"},function(e,t,r){"use strict";e.exports=function(){this.input=null,this.next_in=0,this.avail_in=0,this.total_in=0,this.output=null,this.next_out=0,this.avail_out=0,this.total_out=0,this.msg="",this.state=null,this.data_type=2,this.adler=0}},function(e,t){"function"==typeof Object.create?e.exports=function(e,t){e.super_=t,e.prototype=Object.create(t.prototype,{constructor:{value:e,enumerable:!1,writable:!0,configurable:!0}})}:e.exports=function(e,t){e.super_=t;var r=function(){};r.prototype=t.prototype,e.prototype=new r,e.prototype.constructor=e}},function(e,t){e.exports=function(e){return e&&"object"==typeof e&&"function"==typeof e.copy&&"function"==typeof e.fill&&"function"==typeof e.readUInt8}},function(e,t,r){"use strict";(function(e,n){var i=r(30),a=r(52),o=r(51),s=r(48),f=r(45);for(var l in f)t[l]=f[l];t.NONE=0,t.DEFLATE=1,t.INFLATE=2,t.GZIP=3,t.GUNZIP=4,t.DEFLATERAW=5,t.INFLATERAW=6,t.UNZIP=7;function u(e){if("number"!=typeof e||e<t.DEFLATE||e>t.UNZIP)throw new TypeError("Bad argument");this.dictionary=null,this.err=0,this.flush=0,this.init_done=!1,this.level=0,this.memLevel=0,this.mode=e,this.strategy=0,this.windowBits=0,this.write_in_progress=!1,this.pending_close=!1,this.gzip_id_bytes_read=0}u.prototype.close=function(){this.write_in_progress?this.pending_close=!0:(this.pending_close=!1,i(this.init_done,"close before init"),i(this.mode<=t.UNZIP),this.mode===t.DEFLATE||this.mode===t.GZIP||this.mode===t.DEFLATERAW?o.deflateEnd(this.strm):this.mode!==t.INFLATE&&this.mode!==t.GUNZIP&&this.mode!==t.INFLATERAW&&this.mode!==t.UNZIP||s.inflateEnd(this.strm),this.mode=t.NONE,this.dictionary=null)},u.prototype.write=function(e,t,r,n,i,a,o){return this._write(!0,e,t,r,n,i,a,o)},u.prototype.writeSync=function(e,t,r,n,i,a,o){return this._write(!1,e,t,r,n,i,a,o)},u.prototype._write=function(r,a,o,s,f,l,u,h){if(i.equal(arguments.length,8),i(this.init_done,"write before init"),i(this.mode!==t.NONE,"already finalized"),i.equal(!1,this.write_in_progress,"write already in progress"),i.equal(!1,this.pending_close,"close is pending"),this.write_in_progress=!0,i.equal(!1,void 0===a,"must provide flush value"),this.write_in_progress=!0,a!==t.Z_NO_FLUSH&&a!==t.Z_PARTIAL_FLUSH&&a!==t.Z_SYNC_FLUSH&&a!==t.Z_FULL_FLUSH&&a!==t.Z_FINISH&&a!==t.Z_BLOCK)throw new Error("Invalid flush value");if(null==o&&(o=e.alloc(0),f=0,s=0),this.strm.avail_in=f,this.strm.input=o,this.strm.next_in=s,this.strm.avail_out=h,this.strm.output=l,this.strm.next_out=u,this.flush=a,!r)return this._process(),this._checkError()?this._afterSync():void 0;var d=this;return n.nextTick(function(){d._process(),d._after()}),this},u.prototype._afterSync=function(){var e=this.strm.avail_out,t=this.strm.avail_in;return this.write_in_progress=!1,[t,e]},u.prototype._process=function(){var e=null;switch(this.mode){case t.DEFLATE:case t.GZIP:case t.DEFLATERAW:this.err=o.deflate(this.strm,this.flush);break;case t.UNZIP:switch(this.strm.avail_in>0&&(e=this.strm.next_in),this.gzip_id_bytes_read){case 0:if(null===e)break;if(31!==this.strm.input[e]){this.mode=t.INFLATE;break}if(this.gzip_id_bytes_read=1,e++,1===this.strm.avail_in)break;case 1:if(null===e)break;139===this.strm.input[e]?(this.gzip_id_bytes_read=2,this.mode=t.GUNZIP):this.mode=t.INFLATE;break;default:throw new Error("invalid number of gzip magic number bytes read")}case t.INFLATE:case t.GUNZIP:case t.INFLATERAW:for(this.err=s.inflate(this.strm,this.flush),this.err===t.Z_NEED_DICT&&this.dictionary&&(this.err=s.inflateSetDictionary(this.strm,this.dictionary),this.err===t.Z_OK?this.err=s.inflate(this.strm,this.flush):this.err===t.Z_DATA_ERROR&&(this.err=t.Z_NEED_DICT));this.strm.avail_in>0&&this.mode===t.GUNZIP&&this.err===t.Z_STREAM_END&&0!==this.strm.next_in[0];)this.reset(),this.err=s.inflate(this.strm,this.flush);break;default:throw new Error("Unknown mode "+this.mode)}},u.prototype._checkError=function(){switch(this.err){case t.Z_OK:case t.Z_BUF_ERROR:if(0!==this.strm.avail_out&&this.flush===t.Z_FINISH)return this._error("unexpected end of file"),!1;break;case t.Z_STREAM_END:break;case t.Z_NEED_DICT:return null==this.dictionary?this._error("Missing dictionary"):this._error("Bad dictionary"),!1;default:return this._error("Zlib error"),!1}return!0},u.prototype._after=function(){if(this._checkError()){var e=this.strm.avail_out,t=this.strm.avail_in;this.write_in_progress=!1,this.callback(t,e),this.pending_close&&this.close()}},u.prototype._error=function(e){this.strm.msg&&(e=this.strm.msg),this.onerror(e,this.err),this.write_in_progress=!1,this.pending_close&&this.close()},u.prototype.init=function(e,r,n,a,o){i(4===arguments.length||5===arguments.length,"init(windowBits, level, memLevel, strategy, [dictionary])"),i(e>=8&&e<=15,"invalid windowBits"),i(r>=-1&&r<=9,"invalid compression level"),i(n>=1&&n<=9,"invalid memlevel"),i(a===t.Z_FILTERED||a===t.Z_HUFFMAN_ONLY||a===t.Z_RLE||a===t.Z_FIXED||a===t.Z_DEFAULT_STRATEGY,"invalid strategy"),this._init(r,e,n,a,o),this._setDictionary()},u.prototype.params=function(){throw new Error("deflateParams Not supported")},u.prototype.reset=function(){this._reset(),this._setDictionary()},u.prototype._init=function(e,r,n,i,f){switch(this.level=e,this.windowBits=r,this.memLevel=n,this.strategy=i,this.flush=t.Z_NO_FLUSH,this.err=t.Z_OK,this.mode!==t.GZIP&&this.mode!==t.GUNZIP||(this.windowBits+=16),this.mode===t.UNZIP&&(this.windowBits+=32),this.mode!==t.DEFLATERAW&&this.mode!==t.INFLATERAW||(this.windowBits=-1*this.windowBits),this.strm=new a,this.mode){case t.DEFLATE:case t.GZIP:case t.DEFLATERAW:this.err=o.deflateInit2(this.strm,this.level,t.Z_DEFLATED,this.windowBits,this.memLevel,this.strategy);break;case t.INFLATE:case t.GUNZIP:case t.INFLATERAW:case t.UNZIP:this.err=s.inflateInit2(this.strm,this.windowBits);break;default:throw new Error("Unknown mode "+this.mode)}this.err!==t.Z_OK&&this._error("Init error"),this.dictionary=f,this.write_in_progress=!1,this.init_done=!0},u.prototype._setDictionary=function(){if(null!=this.dictionary){switch(this.err=t.Z_OK,this.mode){case t.DEFLATE:case t.DEFLATERAW:this.err=o.deflateSetDictionary(this.strm,this.dictionary)}this.err!==t.Z_OK&&this._error("Failed to set dictionary")}},u.prototype._reset=function(){switch(this.err=t.Z_OK,this.mode){case t.DEFLATE:case t.DEFLATERAW:case t.GZIP:this.err=o.deflateReset(this.strm);break;case t.INFLATE:case t.INFLATERAW:case t.GUNZIP:this.err=s.inflateReset(this.strm)}this.err!==t.Z_OK&&this._error("Failed to reset stream")},t.Zlib=u}).call(this,r(1).Buffer,r(3))},function(e,t,r){e.exports=r(19).PassThrough},function(e,t,r){e.exports=r(19).Transform},function(e,t,r){e.exports=r(2)},function(e,t,r){e.exports=r(18)},function(e,t,r){"use strict";e.exports=a;var n=r(31),i=r(6);function a(e){if(!(this instanceof a))return new a(e);n.call(this,e)}i.inherits=r(5),i.inherits(a,n),a.prototype._transform=function(e,t,r){r(null,e)}},function(e,t,r){(function(t){function r(e){try{if(!t.localStorage)return!1}catch(e){return!1}var r=t.localStorage[e];return null!=r&&"true"===String(r).toLowerCase()}e.exports=function(e,t){if(r("noDeprecation"))return e;var n=!1;return function(){if(!n){if(r("throwDeprecation"))throw new Error(t);r("traceDeprecation")?console.trace(t):console.warn(t),n=!0}return e.apply(this,arguments)}}}).call(this,r(0))},function(e,t,r){(function(e,t){!function(e,r){"use strict";if(!e.setImmediate){var n,i,a,o,s,f=1,l={},u=!1,h=e.document,d=Object.getPrototypeOf&&Object.getPrototypeOf(e);d=d&&d.setTimeout?d:e,"[object process]"==={}.toString.call(e.process)?n=function(e){t.nextTick(function(){p(e)})}:!function(){if(e.postMessage&&!e.importScripts){var t=!0,r=e.onmessage;return e.onmessage=function(){t=!1},e.postMessage("","*"),e.onmessage=r,t}}()?e.MessageChannel?((a=new MessageChannel).port1.onmessage=function(e){p(e.data)},n=function(e){a.port2.postMessage(e)}):h&&"onreadystatechange"in h.createElement("script")?(i=h.documentElement,n=function(e){var t=h.createElement("script");t.onreadystatechange=function(){p(e),t.onreadystatechange=null,i.removeChild(t),t=null},i.appendChild(t)}):n=function(e){setTimeout(p,0,e)}:(o="setImmediate$"+Math.random()+"$",s=function(t){t.source===e&&"string"==typeof t.data&&0===t.data.indexOf(o)&&p(+t.data.slice(o.length))},e.addEventListener?e.addEventListener("message",s,!1):e.attachEvent("onmessage",s),n=function(t){e.postMessage(o+t,"*")}),d.setImmediate=function(e){"function"!=typeof e&&(e=new Function(""+e));for(var t=new Array(arguments.length-1),r=0;r<t.length;r++)t[r]=arguments[r+1];var i={callback:e,args:t};return l[f]=i,n(f),f++},d.clearImmediate=c}function c(e){delete l[e]}function p(e){if(u)setTimeout(p,0,e);else{var t=l[e];if(t){u=!0;try{!function(e){var t=e.callback,n=e.args;switch(n.length){case 0:t();break;case 1:t(n[0]);break;case 2:t(n[0],n[1]);break;case 3:t(n[0],n[1],n[2]);break;default:t.apply(r,n)}}(t)}finally{c(e),u=!1}}}}}("undefined"==typeof self?void 0===e?this:e:self)}).call(this,r(0),r(3))},function(e,t,r){(function(e){var n=Function.prototype.apply;function i(e,t){this._id=e,this._clearFn=t}t.setTimeout=function(){return new i(n.call(setTimeout,window,arguments),clearTimeout)},t.setInterval=function(){return new i(n.call(setInterval,window,arguments),clearInterval)},t.clearTimeout=t.clearInterval=function(e){e&&e.close()},i.prototype.unref=i.prototype.ref=function(){},i.prototype.close=function(){this._clearFn.call(window,this._id)},t.enroll=function(e,t){clearTimeout(e._idleTimeoutId),e._idleTimeout=t},t.unenroll=function(e){clearTimeout(e._idleTimeoutId),e._idleTimeout=-1},t._unrefActive=t.active=function(e){clearTimeout(e._idleTimeoutId);var t=e._idleTimeout;t>=0&&(e._idleTimeoutId=setTimeout(function(){e._onTimeout&&e._onTimeout()},t))},r(62),t.setImmediate="undefined"!=typeof self&&self.setImmediate||void 0!==e&&e.setImmediate||this&&this.setImmediate,t.clearImmediate="undefined"!=typeof self&&self.clearImmediate||void 0!==e&&e.clearImmediate||this&&this.clearImmediate}).call(this,r(0))},function(e,t){},function(e,t,r){"use strict";var n=r(9).Buffer,i=r(64);e.exports=function(){function e(){!function(e,t){if(!(e instanceof t))throw new TypeError("Cannot call a class as a function")}(this,e),this.head=null,this.tail=null,this.length=0}return e.prototype.push=function(e){var t={data:e,next:null};this.length>0?this.tail.next=t:this.head=t,this.tail=t,++this.length},e.prototype.unshift=function(e){var t={data:e,next:this.head};0===this.length&&(this.tail=t),this.head=t,++this.length},e.prototype.shift=function(){if(0!==this.length){var e=this.head.data;return 1===this.length?this.head=this.tail=null:this.head=this.head.next,--this.length,e}},e.prototype.clear=function(){this.head=this.tail=null,this.length=0},e.prototype.join=function(e){if(0===this.length)return"";for(var t=this.head,r=""+t.data;t=t.next;)r+=e+t.data;return r},e.prototype.concat=function(e){if(0===this.length)return n.alloc(0);if(1===this.length)return this.head.data;for(var t,r,i,a=n.allocUnsafe(e>>>0),o=this.head,s=0;o;)t=o.data,r=a,i=s,t.copy(r,i),s+=o.data.length,o=o.next;return a},e}(),i&&i.inspect&&i.inspect.custom&&(e.exports.prototype[i.inspect.custom]=function(){var e=i.inspect({length:this.length});return this.constructor.name+" "+e})},function(e,t){},function(e,t,r){e.exports=i;var n=r(20).EventEmitter;function i(){n.call(this)}r(5)(i,n),i.Readable=r(19),i.Writable=r(59),i.Duplex=r(58),i.Transform=r(57),i.PassThrough=r(56),i.Stream=i,i.prototype.pipe=function(e,t){var r=this;function i(t){e.writable&&!1===e.write(t)&&r.pause&&r.pause()}function a(){r.readable&&r.resume&&r.resume()}r.on("data",i),e.on("drain",a),e._isStdio||t&&!1===t.end||(r.on("end",s),r.on("close",f));var o=!1;function s(){o||(o=!0,e.end())}function f(){o||(o=!0,"function"==typeof e.destroy&&e.destroy())}function l(e){if(u(),0===n.listenerCount(this,"error"))throw e}function u(){r.removeListener("data",i),e.removeListener("drain",a),r.removeListener("end",s),r.removeListener("close",f),r.removeListener("error",l),e.removeListener("error",l),r.removeListener("end",u),r.removeListener("close",u),e.removeListener("close",u)}return r.on("error",l),e.on("error",l),r.on("end",u),r.on("close",u),e.on("close",u),e.emit("pipe",r),e}},function(e,t,r){"use strict";(function(e){var n=r(1).Buffer,i=r(67).Transform,a=r(55),o=r(29),s=r(30).ok,f=r(1).kMaxLength,l="Cannot create final Buffer. It would be larger than 0x"+f.toString(16)+" bytes";a.Z_MIN_WINDOWBITS=8,a.Z_MAX_WINDOWBITS=15,a.Z_DEFAULT_WINDOWBITS=15,a.Z_MIN_CHUNK=64,a.Z_MAX_CHUNK=1/0,a.Z_DEFAULT_CHUNK=16384,a.Z_MIN_MEMLEVEL=1,a.Z_MAX_MEMLEVEL=9,a.Z_DEFAULT_MEMLEVEL=8,a.Z_MIN_LEVEL=-1,a.Z_MAX_LEVEL=9,a.Z_DEFAULT_LEVEL=a.Z_DEFAULT_COMPRESSION;for(var u=Object.keys(a),h=0;h<u.length;h++){var d=u[h];d.match(/^Z/)&&Object.defineProperty(t,d,{enumerable:!0,value:a[d],writable:!1})}for(var c={Z_OK:a.Z_OK,Z_STREAM_END:a.Z_STREAM_END,Z_NEED_DICT:a.Z_NEED_DICT,Z_ERRNO:a.Z_ERRNO,Z_STREAM_ERROR:a.Z_STREAM_ERROR,Z_DATA_ERROR:a.Z_DATA_ERROR,Z_MEM_ERROR:a.Z_MEM_ERROR,Z_BUF_ERROR:a.Z_BUF_ERROR,Z_VERSION_ERROR:a.Z_VERSION_ERROR},p=Object.keys(c),g=0;g<p.length;g++){var m=p[g];c[c[m]]=m}function _(e,t,r){var i=[],a=0;function o(){for(var t;null!==(t=e.read());)i.push(t),a+=t.length;e.once("readable",o)}function s(){var t,o=null;a>=f?o=new RangeError(l):t=n.concat(i,a),i=[],e.close(),r(o,t)}e.on("error",function(t){e.removeListener("end",s),e.removeListener("readable",o),r(t)}),e.on("end",s),e.end(t),o()}function b(e,t){if("string"==typeof t&&(t=n.from(t)),!n.isBuffer(t))throw new TypeError("Not a string or buffer");var r=e._finishFlushFlag;return e._processChunk(t,r)}function y(e){if(!(this instanceof y))return new y(e);P.call(this,e,a.DEFLATE)}function v(e){if(!(this instanceof v))return new v(e);P.call(this,e,a.INFLATE)}function w(e){if(!(this instanceof w))return new w(e);P.call(this,e,a.GZIP)}function E(e){if(!(this instanceof E))return new E(e);P.call(this,e,a.GUNZIP)}function x(e){if(!(this instanceof x))return new x(e);P.call(this,e,a.DEFLATERAW)}function k(e){if(!(this instanceof k))return new k(e);P.call(this,e,a.INFLATERAW)}function S(e){if(!(this instanceof S))return new S(e);P.call(this,e,a.UNZIP)}function A(e){return e===a.Z_NO_FLUSH||e===a.Z_PARTIAL_FLUSH||e===a.Z_SYNC_FLUSH||e===a.Z_FULL_FLUSH||e===a.Z_FINISH||e===a.Z_BLOCK}function P(e,r){var o=this;if(this._opts=e=e||{},this._chunkSize=e.chunkSize||t.Z_DEFAULT_CHUNK,i.call(this,e),e.flush&&!A(e.flush))throw new Error("Invalid flush flag: "+e.flush);if(e.finishFlush&&!A(e.finishFlush))throw new Error("Invalid flush flag: "+e.finishFlush);if(this._flushFlag=e.flush||a.Z_NO_FLUSH,this._finishFlushFlag=void 0!==e.finishFlush?e.finishFlush:a.Z_FINISH,e.chunkSize&&(e.chunkSize<t.Z_MIN_CHUNK||e.chunkSize>t.Z_MAX_CHUNK))throw new Error("Invalid chunk size: "+e.chunkSize);if(e.windowBits&&(e.windowBits<t.Z_MIN_WINDOWBITS||e.windowBits>t.Z_MAX_WINDOWBITS))throw new Error("Invalid windowBits: "+e.windowBits);if(e.level&&(e.level<t.Z_MIN_LEVEL||e.level>t.Z_MAX_LEVEL))throw new Error("Invalid compression level: "+e.level);if(e.memLevel&&(e.memLevel<t.Z_MIN_MEMLEVEL||e.memLevel>t.Z_MAX_MEMLEVEL))throw new Error("Invalid memLevel: "+e.memLevel);if(e.strategy&&e.strategy!=t.Z_FILTERED&&e.strategy!=t.Z_HUFFMAN_ONLY&&e.strategy!=t.Z_RLE&&e.strategy!=t.Z_FIXED&&e.strategy!=t.Z_DEFAULT_STRATEGY)throw new Error("Invalid strategy: "+e.strategy);if(e.dictionary&&!n.isBuffer(e.dictionary))throw new Error("Invalid dictionary: it should be a Buffer instance");this._handle=new a.Zlib(r);var s=this;this._hadError=!1,this._handle.onerror=function(e,r){O(s),s._hadError=!0;var n=new Error(e);n.errno=r,n.code=t.codes[r],s.emit("error",n)};var f=t.Z_DEFAULT_COMPRESSION;"number"==typeof e.level&&(f=e.level);var l=t.Z_DEFAULT_STRATEGY;"number"==typeof e.strategy&&(l=e.strategy),this._handle.init(e.windowBits||t.Z_DEFAULT_WINDOWBITS,f,e.memLevel||t.Z_DEFAULT_MEMLEVEL,l,e.dictionary),this._buffer=n.allocUnsafe(this._chunkSize),this._offset=0,this._level=f,this._strategy=l,this.once("end",this.close),Object.defineProperty(this,"_closed",{get:function(){return!o._handle},configurable:!0,enumerable:!0})}function O(t,r){r&&e.nextTick(r),t._handle&&(t._handle.close(),t._handle=null)}function T(e){e.emit("close")}Object.defineProperty(t,"codes",{enumerable:!0,value:Object.freeze(c),writable:!1}),t.Deflate=y,t.Inflate=v,t.Gzip=w,t.Gunzip=E,t.DeflateRaw=x,t.InflateRaw=k,t.Unzip=S,t.createDeflate=function(e){return new y(e)},t.createInflate=function(e){return new v(e)},t.createDeflateRaw=function(e){return new x(e)},t.createInflateRaw=function(e){return new k(e)},t.createGzip=function(e){return new w(e)},t.createGunzip=function(e){return new E(e)},t.createUnzip=function(e){return new S(e)},t.deflate=function(e,t,r){return"function"==typeof t&&(r=t,t={}),_(new y(t),e,r)},t.deflateSync=function(e,t){return b(new y(t),e)},t.gzip=function(e,t,r){return"function"==typeof t&&(r=t,t={}),_(new w(t),e,r)},t.gzipSync=function(e,t){return b(new w(t),e)},t.deflateRaw=function(e,t,r){return"function"==typeof t&&(r=t,t={}),_(new x(t),e,r)},t.deflateRawSync=function(e,t){return b(new x(t),e)},t.unzip=function(e,t,r){return"function"==typeof t&&(r=t,t={}),_(new S(t),e,r)},t.unzipSync=function(e,t){return b(new S(t),e)},t.inflate=function(e,t,r){return"function"==typeof t&&(r=t,t={}),_(new v(t),e,r)},t.inflateSync=function(e,t){return b(new v(t),e)},t.gunzip=function(e,t,r){return"function"==typeof t&&(r=t,t={}),_(new E(t),e,r)},t.gunzipSync=function(e,t){return b(new E(t),e)},t.inflateRaw=function(e,t,r){return"function"==typeof t&&(r=t,t={}),_(new k(t),e,r)},t.inflateRawSync=function(e,t){return b(new k(t),e)},o.inherits(P,i),P.prototype.params=function(r,n,i){if(r<t.Z_MIN_LEVEL||r>t.Z_MAX_LEVEL)throw new RangeError("Invalid compression level: "+r);if(n!=t.Z_FILTERED&&n!=t.Z_HUFFMAN_ONLY&&n!=t.Z_RLE&&n!=t.Z_FIXED&&n!=t.Z_DEFAULT_STRATEGY)throw new TypeError("Invalid strategy: "+n);if(this._level!==r||this._strategy!==n){var o=this;this.flush(a.Z_SYNC_FLUSH,function(){s(o._handle,"zlib binding closed"),o._handle.params(r,n),o._hadError||(o._level=r,o._strategy=n,i&&i())})}else e.nextTick(i)},P.prototype.reset=function(){return s(this._handle,"zlib binding closed"),this._handle.reset()},P.prototype._flush=function(e){this._transform(n.alloc(0),"",e)},P.prototype.flush=function(t,r){var i=this,o=this._writableState;("function"==typeof t||void 0===t&&!r)&&(r=t,t=a.Z_FULL_FLUSH),o.ended?r&&e.nextTick(r):o.ending?r&&this.once("end",r):o.needDrain?r&&this.once("drain",function(){return i.flush(t,r)}):(this._flushFlag=t,this.write(n.alloc(0),"",r))},P.prototype.close=function(t){O(this,t),e.nextTick(T,this)},P.prototype._transform=function(e,t,r){var i,o=this._writableState,s=(o.ending||o.ended)&&(!e||o.length===e.length);return null===e||n.isBuffer(e)?this._handle?(s?i=this._finishFlushFlag:(i=this._flushFlag,e.length>=o.length&&(this._flushFlag=this._opts.flush||a.Z_NO_FLUSH)),void this._processChunk(e,i,r)):r(new Error("zlib binding closed")):r(new Error("invalid input"))},P.prototype._processChunk=function(e,t,r){var i=e&&e.length,a=this._chunkSize-this._offset,o=0,u=this,h="function"==typeof r;if(!h){var d,c=[],p=0;this.on("error",function(e){d=e}),s(this._handle,"zlib binding closed");do{var g=this._handle.writeSync(t,e,o,i,this._buffer,this._offset,a)}while(!this._hadError&&b(g[0],g[1]));if(this._hadError)throw d;if(p>=f)throw O(this),new RangeError(l);var m=n.concat(c,p);return O(this),m}s(this._handle,"zlib binding closed");var _=this._handle.write(t,e,o,i,this._buffer,this._offset,a);function b(f,l){if(this&&(this.buffer=null,this.callback=null),!u._hadError){var d=a-l;if(s(d>=0,"have should not go down"),d>0){var g=u._buffer.slice(u._offset,u._offset+d);u._offset+=d,h?u.push(g):(c.push(g),p+=g.length)}if((0===l||u._offset>=u._chunkSize)&&(a=u._chunkSize,u._offset=0,u._buffer=n.allocUnsafe(u._chunkSize)),0===l){if(o+=i-f,i=f,!h)return!0;var m=u._handle.write(t,e,o,i,u._buffer,u._offset,u._chunkSize);return m.callback=b,void(m.buffer=e)}if(!h)return!1;r()}}_.buffer=e,_.callback=b},o.inherits(y,P),o.inherits(v,P),o.inherits(w,P),o.inherits(E,P),o.inherits(x,P),o.inherits(k,P),o.inherits(S,P)}).call(this,r(3))},function(e,t){e.exports=function(e){return e.webpackPolyfill||(e.deprecate=function(){},e.paths=[],e.children||(e.children=[]),Object.defineProperty(e,"loaded",{enumerable:!0,get:function(){return e.l}}),Object.defineProperty(e,"id",{enumerable:!0,get:function(){return e.i}}),e.webpackPolyfill=1),e}},function(e,t,r){"use strict";(function(e){Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(t,d){if(void 0===t)throw"dicomParser.parseDicom: missing required parameter 'byteArray'";function c(f){var c=function(e){if(void 0===e.elements.x00020010)throw"dicomParser.parseDicom: missing required meta header attribute 0002,0010";var r=e.elements.x00020010;return u.readFixedString(t,r.dataOffset,r.length)}(f),p=function(e){if("1.2.840.10008.1.2"===e)return!1;return!0}(c),g=function(o,f){if("1.2.840.10008.1.2.1.99"===o){if(d&&d.inflater){var u=d.inflater(t,f);return new a.default(s.default,u,0)}if(void 0!==e&&this.module!==e){var h=r(68),c=(0,l.default)(t,f,t.length-f),p=h.inflateRawSync(c),g=(0,n.default)(t,p.length+f);return t.copy(g,0,0,f),p.copy(g,f),new a.default(s.default,g,0)}if("undefined"!=typeof pako){var m=t.slice(f),_=pako.inflateRaw(m),b=(0,n.default)(t,_.length+f);return b.set(t.slice(0,f),0),b.set(_,f),new a.default(s.default,b,0)}throw"dicomParser.parseDicom: no inflater available to handle deflate transfer syntax"}if("1.2.840.10008.1.2.2"===o)return new a.default(i.default,t,f);return new a.default(s.default,t,f)}(c,f.position),m=new o.default(g.byteArrayParser,g.byteArray,{});m.warnings=g.warnings;try{p?h.parseDicomDataSetExplicit(m,g,g.byteArray.length,d):h.parseDicomDataSetImplicit(m,g,g.byteArray.length,d)}catch(e){var _={exception:e,dataSet:m};throw _}return m}return p=(0,f.default)(t,d),g=c(p),function(e,t){for(var r in e.elements)e.elements.hasOwnProperty(r)&&(t.elements[r]=e.elements[r]);return void 0!==e.warnings&&(t.warnings=e.warnings.concat(t.warnings)),t}(p,g);var p,g};var n=c(r(22)),i=c(r(37)),a=c(r(12)),o=c(r(7)),s=c(r(21)),f=c(r(36)),l=c(r(11)),u=d(r(14)),h=d(r(16));function d(e){if(e&&e.__esModule)return e;var t={};if(null!=e)for(var r in e)Object.prototype.hasOwnProperty.call(e,r)&&(t[r]=e[r]);return t.default=e,t}function c(e){return e&&e.__esModule?e:{default:e}}}).call(this,r(69)(e))},function(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default="1.8.1"},function(e,t){t.read=function(e,t,r,n,i){var a,o,s=8*i-n-1,f=(1<<s)-1,l=f>>1,u=-7,h=r?i-1:0,d=r?-1:1,c=e[t+h];for(h+=d,a=c&(1<<-u)-1,c>>=-u,u+=s;u>0;a=256*a+e[t+h],h+=d,u-=8);for(o=a&(1<<-u)-1,a>>=-u,u+=n;u>0;o=256*o+e[t+h],h+=d,u-=8);if(0===a)a=1-l;else{if(a===f)return o?NaN:1/0*(c?-1:1);o+=Math.pow(2,n),a-=l}return(c?-1:1)*o*Math.pow(2,a-n)},t.write=function(e,t,r,n,i,a){var o,s,f,l=8*a-i-1,u=(1<<l)-1,h=u>>1,d=23===i?Math.pow(2,-24)-Math.pow(2,-77):0,c=n?0:a-1,p=n?1:-1,g=t<0||0===t&&1/t<0?1:0;for(t=Math.abs(t),isNaN(t)||t===1/0?(s=isNaN(t)?1:0,o=u):(o=Math.floor(Math.log(t)/Math.LN2),t*(f=Math.pow(2,-o))<1&&(o--,f*=2),(t+=o+h>=1?d/f:d*Math.pow(2,1-h))*f>=2&&(o++,f/=2),o+h>=u?(s=0,o=u):o+h>=1?(s=(t*f-1)*Math.pow(2,i),o+=h):(s=t*Math.pow(2,h-1)*Math.pow(2,i),o=0));i>=8;e[r+c]=255&s,c+=p,s/=256,i-=8);for(o=o<<i|s,l+=i;l>0;e[r+c]=255&o,c+=p,o/=256,l-=8);e[r+c-p]|=128*g}},function(e,t,r){"use strict";t.byteLength=function(e){return 3*e.length/4-l(e)},t.toByteArray=function(e){var t,r,n,o,s,f=e.length;o=l(e),s=new a(3*f/4-o),r=o>0?f-4:f;var u=0;for(t=0;t<r;t+=4)n=i[e.charCodeAt(t)]<<18|i[e.charCodeAt(t+1)]<<12|i[e.charCodeAt(t+2)]<<6|i[e.charCodeAt(t+3)],s[u++]=n>>16&255,s[u++]=n>>8&255,s[u++]=255&n;2===o?(n=i[e.charCodeAt(t)]<<2|i[e.charCodeAt(t+1)]>>4,s[u++]=255&n):1===o&&(n=i[e.charCodeAt(t)]<<10|i[e.charCodeAt(t+1)]<<4|i[e.charCodeAt(t+2)]>>2,s[u++]=n>>8&255,s[u++]=255&n);return s},t.fromByteArray=function(e){for(var t,r=e.length,i=r%3,a="",o=[],s=0,f=r-i;s<f;s+=16383)o.push(u(e,s,s+16383>f?f:s+16383));1===i?(t=e[r-1],a+=n[t>>2],a+=n[t<<4&63],a+="=="):2===i&&(t=(e[r-2]<<8)+e[r-1],a+=n[t>>10],a+=n[t>>4&63],a+=n[t<<2&63],a+="=");return o.push(a),o.join("")};for(var n=[],i=[],a="undefined"!=typeof Uint8Array?Uint8Array:Array,o="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/",s=0,f=o.length;s<f;++s)n[s]=o[s],i[o.charCodeAt(s)]=s;function l(e){var t=e.length;if(t%4>0)throw new Error("Invalid string. Length must be a multiple of 4");return"="===e[t-2]?2:"="===e[t-1]?1:0}function u(e,t,r){for(var i,a,o=[],s=t;s<r;s+=3)i=(e[s]<<16&16711680)+(e[s+1]<<8&65280)+(255&e[s+2]),o.push(n[(a=i)>>18&63]+n[a>>12&63]+n[a>>6&63]+n[63&a]);return o.join("")}i["-".charCodeAt(0)]=62,i["_".charCodeAt(0)]=63},function(e,t,r){"use strict";function n(e,t){return 255===e.byteArray[t]&&217===e.byteArray[t+1]}function i(e,t,r){var i=t.fragments[r];return!(!n(e,i.position+i.length-2)&&!n(e,i.position+i.length-3))}function a(e,t,r){for(var n=r;n<t.fragments.length;n++)if(i(e,t,n))return n}Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(e,t,r){if(void 0===e)throw"dicomParser.createJPEGBasicOffsetTable: missing required parameter dataSet";if(void 0===t)throw"dicomParser.createJPEGBasicOffsetTable: missing required parameter pixelDataElement";if("x7fe00010"!==t.tag)throw"dicomParser.createJPEGBasicOffsetTable: parameter 'pixelDataElement' refers to non pixel data tag (expected tag = x7fe00010'";if(!0!==t.encapsulatedPixelData)throw"dicomParser.createJPEGBasicOffsetTable: parameter 'pixelDataElement' refers to pixel data element that does not have encapsulated pixel data";if(!0!==t.hadUndefinedLength)throw"dicomParser.createJPEGBasicOffsetTable: parameter 'pixelDataElement' refers to pixel data element that does not have encapsulated pixel data";if(void 0===t.basicOffsetTable)throw"dicomParser.createJPEGBasicOffsetTable: parameter 'pixelDataElement' refers to pixel data element that does not have encapsulated pixel data";if(void 0===t.fragments)throw"dicomParser.createJPEGBasicOffsetTable: parameter 'pixelDataElement' refers to pixel data element that does not have encapsulated pixel data";if(t.fragments.length<=0)throw"dicomParser.createJPEGBasicOffsetTable: parameter 'pixelDataElement' refers to pixel data element that does not have encapsulated pixel data";if(r&&r.length<=0)throw"dicomParser.createJPEGBasicOffsetTable: parameter 'fragments' must not be zero length";r=r||t.fragments;var n=[],i=0;for(;;){n.push(t.fragments[i].offset);var o=a(e,t,i);if(void 0===o||o===t.fragments.length-1)return n;i=o+1}}},function(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default=function e(t,r){if(void 0===t)throw"dicomParser.explicitDataSetToJS: missing required parameter dataSet";r=r||{omitPrivateAttibutes:!0,maxElementLength:128};var n={};for(var i in t.elements){var s=t.elements[i];if(!0!==r.omitPrivateAttibutes||!o.isPrivateTag(i))if(s.items){for(var f=[],l=0;l<s.items.length;l++)f.push(e(s.items[l].dataSet,r));n[i]=f}else{var u;u=void 0,s.length<r.maxElementLength&&(u=(0,a.default)(t,s)),n[i]=void 0!==u?u:{dataOffset:s.dataOffset,length:s.length}}}return n};var n,i=r(43),a=(n=i)&&n.__esModule?n:{default:n},o=function(e){if(e&&e.__esModule)return e;var t={};if(null!=e)for(var r in e)Object.prototype.hasOwnProperty.call(e,r)&&(t[r]=e[r]);return t.default=e,t}(r(25))},function(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(e,t){if(e&&8===e.length){var r=parseInt(e.substring(0,4),10),n=parseInt(e.substring(4,6),10),i=parseInt(e.substring(6,8),10);if(t&&!0!==function(e,t,r){if(isNaN(r))return!1;return t>0&&t<=12&&e>0&&e<=function(e,t){switch(e){case 2:return t%4==0&&t%100||t%400==0?29:28;case 9:case 4:case 6:case 11:return 30;default:return 31}}(t,r)}(i,n,r))throw"invalid DA '"+e+"'";return{year:r,month:n,day:i}}if(t)throw"invalid DA '"+e+"'";return}},function(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0}),t.default=function(e,t){if(e.length>=2){var r=parseInt(e.substring(0,2),10),n=e.length>=4?parseInt(e.substring(2,4),10):void 0,i=e.length>=6?parseInt(e.substring(4,6),10):void 0,a=e.length>=8?parseInt(e.substring(7,13),10):void 0;if(t&&(isNaN(r)||void 0!==n&&isNaN(n)||void 0!==i&&isNaN(i)||void 0!==a&&isNaN(a)||r<0||r>23||n&&(n<0||n>59)||i&&(i<0||i>59)||a&&(a<0||a>999999)))throw"invalid TM '"+e+"'";return{hours:r,minutes:n,seconds:i,fractionalSeconds:a}}if(t)throw"invalid TM '"+e+"'";return}},function(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0});var n=r(25);Object.keys(n).forEach(function(e){"default"!==e&&"__esModule"!==e&&Object.defineProperty(t,e,{enumerable:!0,get:function(){return n[e]}})});var i=r(77);Object.defineProperty(t,"parseTM",{enumerable:!0,get:function(){return l(i).default}});var a=r(76);Object.defineProperty(t,"parseDA",{enumerable:!0,get:function(){return l(a).default}});var o=r(43);Object.defineProperty(t,"explicitElementToString",{enumerable:!0,get:function(){return l(o).default}});var s=r(75);Object.defineProperty(t,"explicitDataSetToJS",{enumerable:!0,get:function(){return l(s).default}});var f=r(74);function l(e){return e&&e.__esModule?e:{default:e}}Object.defineProperty(t,"createJPEGBasicOffsetTable",{enumerable:!0,get:function(){return l(f).default}})},function(e,t,r){"use strict";Object.defineProperty(t,"__esModule",{value:!0});var n=r(78);Object.keys(n).forEach(function(e){"default"!==e&&"__esModule"!==e&&Object.defineProperty(t,e,{enumerable:!0,get:function(){return n[e]}})});var i=r(16);Object.keys(i).forEach(function(e){"default"!==e&&"__esModule"!==e&&Object.defineProperty(t,e,{enumerable:!0,get:function(){return i[e]}})});var a=r(14);Object.keys(a).forEach(function(e){"default"!==e&&"__esModule"!==e&&Object.defineProperty(t,e,{enumerable:!0,get:function(){return a[e]}})});var o=r(22);Object.defineProperty(t,"alloc",{enumerable:!0,get:function(){return P(o).default}});var s=r(71);Object.defineProperty(t,"version",{enumerable:!0,get:function(){return P(s).default}});var f=r(37);Object.defineProperty(t,"bigEndianByteArrayParser",{enumerable:!0,get:function(){return P(f).default}});var l=r(12);Object.defineProperty(t,"ByteStream",{enumerable:!0,get:function(){return P(l).default}});var u=r(11);Object.defineProperty(t,"sharedCopy",{enumerable:!0,get:function(){return P(u).default}});var h=r(7);Object.defineProperty(t,"DataSet",{enumerable:!0,get:function(){return P(h).default}});var d=r(41);Object.defineProperty(t,"findAndSetUNElementLength",{enumerable:!0,get:function(){return P(d).default}});var c=r(42);Object.defineProperty(t,"findEndOfEncapsulatedElement",{enumerable:!0,get:function(){return P(c).default}});var p=r(24);Object.defineProperty(t,"findItemDelimitationItemAndSetElementLength",{enumerable:!0,get:function(){return P(p).default}});var g=r(21);Object.defineProperty(t,"littleEndianByteArrayParser",{enumerable:!0,get:function(){return P(g).default}});var m=r(70);Object.defineProperty(t,"parseDicom",{enumerable:!0,get:function(){return P(m).default}});var _=r(15);Object.defineProperty(t,"readDicomElementExplicit",{enumerable:!0,get:function(){return P(_).default}});var b=r(23);Object.defineProperty(t,"readDicomElementImplicit",{enumerable:!0,get:function(){return P(b).default}});var y=r(26);Object.defineProperty(t,"readEncapsulatedImageFrame",{enumerable:!0,get:function(){return P(y).default}});var v=r(44);Object.defineProperty(t,"readEncapsulatedPixelData",{enumerable:!0,get:function(){return P(v).default}});var w=r(17);Object.defineProperty(t,"readEncapsulatedPixelDataFromFragments",{enumerable:!0,get:function(){return P(w).default}});var E=r(36);Object.defineProperty(t,"readPart10Header",{enumerable:!0,get:function(){return P(E).default}});var x=r(40);Object.defineProperty(t,"readSequenceItemsExplicit",{enumerable:!0,get:function(){return P(x).default}});var k=r(39);Object.defineProperty(t,"readSequenceItemsImplicit",{enumerable:!0,get:function(){return P(k).default}});var S=r(13);Object.defineProperty(t,"readSequenceItem",{enumerable:!0,get:function(){return P(S).default}});var A=r(4);function P(e){return e&&e.__esModule?e:{default:e}}Object.defineProperty(t,"readTag",{enumerable:!0,get:function(){return P(A).default}})}])});
 //# sourceMappingURL=dicomParser.min.js.map
-
-/***/ }),
-
-/***/ "./node_modules/events/events.js":
-/*!***************************************!*\
-  !*** ./node_modules/events/events.js ***!
-  \***************************************/
-/*! no static exports found */
-/***/ (function(module, exports) {
-
-// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-function EventEmitter() {
-  this._events = this._events || {};
-  this._maxListeners = this._maxListeners || undefined;
-}
-module.exports = EventEmitter;
-
-// Backwards-compat with node 0.10.x
-EventEmitter.EventEmitter = EventEmitter;
-
-EventEmitter.prototype._events = undefined;
-EventEmitter.prototype._maxListeners = undefined;
-
-// By default EventEmitters will print a warning if more than 10 listeners are
-// added to it. This is a useful default which helps finding memory leaks.
-EventEmitter.defaultMaxListeners = 10;
-
-// Obviously not all Emitters should be limited to 10. This function allows
-// that to be increased. Set to zero for unlimited.
-EventEmitter.prototype.setMaxListeners = function(n) {
-  if (!isNumber(n) || n < 0 || isNaN(n))
-    throw TypeError('n must be a positive number');
-  this._maxListeners = n;
-  return this;
-};
-
-EventEmitter.prototype.emit = function(type) {
-  var er, handler, len, args, i, listeners;
-
-  if (!this._events)
-    this._events = {};
-
-  // If there is no 'error' event listener then throw.
-  if (type === 'error') {
-    if (!this._events.error ||
-        (isObject(this._events.error) && !this._events.error.length)) {
-      er = arguments[1];
-      if (er instanceof Error) {
-        throw er; // Unhandled 'error' event
-      } else {
-        // At least give some kind of context to the user
-        var err = new Error('Uncaught, unspecified "error" event. (' + er + ')');
-        err.context = er;
-        throw err;
-      }
-    }
-  }
-
-  handler = this._events[type];
-
-  if (isUndefined(handler))
-    return false;
-
-  if (isFunction(handler)) {
-    switch (arguments.length) {
-      // fast cases
-      case 1:
-        handler.call(this);
-        break;
-      case 2:
-        handler.call(this, arguments[1]);
-        break;
-      case 3:
-        handler.call(this, arguments[1], arguments[2]);
-        break;
-      // slower
-      default:
-        args = Array.prototype.slice.call(arguments, 1);
-        handler.apply(this, args);
-    }
-  } else if (isObject(handler)) {
-    args = Array.prototype.slice.call(arguments, 1);
-    listeners = handler.slice();
-    len = listeners.length;
-    for (i = 0; i < len; i++)
-      listeners[i].apply(this, args);
-  }
-
-  return true;
-};
-
-EventEmitter.prototype.addListener = function(type, listener) {
-  var m;
-
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  if (!this._events)
-    this._events = {};
-
-  // To avoid recursion in the case that type === "newListener"! Before
-  // adding it to the listeners, first emit "newListener".
-  if (this._events.newListener)
-    this.emit('newListener', type,
-              isFunction(listener.listener) ?
-              listener.listener : listener);
-
-  if (!this._events[type])
-    // Optimize the case of one listener. Don't need the extra array object.
-    this._events[type] = listener;
-  else if (isObject(this._events[type]))
-    // If we've already got an array, just append.
-    this._events[type].push(listener);
-  else
-    // Adding the second element, need to change to array.
-    this._events[type] = [this._events[type], listener];
-
-  // Check for listener leak
-  if (isObject(this._events[type]) && !this._events[type].warned) {
-    if (!isUndefined(this._maxListeners)) {
-      m = this._maxListeners;
-    } else {
-      m = EventEmitter.defaultMaxListeners;
-    }
-
-    if (m && m > 0 && this._events[type].length > m) {
-      this._events[type].warned = true;
-      console.error('(node) warning: possible EventEmitter memory ' +
-                    'leak detected. %d listeners added. ' +
-                    'Use emitter.setMaxListeners() to increase limit.',
-                    this._events[type].length);
-      if (typeof console.trace === 'function') {
-        // not supported in IE 10
-        console.trace();
-      }
-    }
-  }
-
-  return this;
-};
-
-EventEmitter.prototype.on = EventEmitter.prototype.addListener;
-
-EventEmitter.prototype.once = function(type, listener) {
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  var fired = false;
-
-  function g() {
-    this.removeListener(type, g);
-
-    if (!fired) {
-      fired = true;
-      listener.apply(this, arguments);
-    }
-  }
-
-  g.listener = listener;
-  this.on(type, g);
-
-  return this;
-};
-
-// emits a 'removeListener' event iff the listener was removed
-EventEmitter.prototype.removeListener = function(type, listener) {
-  var list, position, length, i;
-
-  if (!isFunction(listener))
-    throw TypeError('listener must be a function');
-
-  if (!this._events || !this._events[type])
-    return this;
-
-  list = this._events[type];
-  length = list.length;
-  position = -1;
-
-  if (list === listener ||
-      (isFunction(list.listener) && list.listener === listener)) {
-    delete this._events[type];
-    if (this._events.removeListener)
-      this.emit('removeListener', type, listener);
-
-  } else if (isObject(list)) {
-    for (i = length; i-- > 0;) {
-      if (list[i] === listener ||
-          (list[i].listener && list[i].listener === listener)) {
-        position = i;
-        break;
-      }
-    }
-
-    if (position < 0)
-      return this;
-
-    if (list.length === 1) {
-      list.length = 0;
-      delete this._events[type];
-    } else {
-      list.splice(position, 1);
-    }
-
-    if (this._events.removeListener)
-      this.emit('removeListener', type, listener);
-  }
-
-  return this;
-};
-
-EventEmitter.prototype.removeAllListeners = function(type) {
-  var key, listeners;
-
-  if (!this._events)
-    return this;
-
-  // not listening for removeListener, no need to emit
-  if (!this._events.removeListener) {
-    if (arguments.length === 0)
-      this._events = {};
-    else if (this._events[type])
-      delete this._events[type];
-    return this;
-  }
-
-  // emit removeListener for all listeners on all events
-  if (arguments.length === 0) {
-    for (key in this._events) {
-      if (key === 'removeListener') continue;
-      this.removeAllListeners(key);
-    }
-    this.removeAllListeners('removeListener');
-    this._events = {};
-    return this;
-  }
-
-  listeners = this._events[type];
-
-  if (isFunction(listeners)) {
-    this.removeListener(type, listeners);
-  } else if (listeners) {
-    // LIFO order
-    while (listeners.length)
-      this.removeListener(type, listeners[listeners.length - 1]);
-  }
-  delete this._events[type];
-
-  return this;
-};
-
-EventEmitter.prototype.listeners = function(type) {
-  var ret;
-  if (!this._events || !this._events[type])
-    ret = [];
-  else if (isFunction(this._events[type]))
-    ret = [this._events[type]];
-  else
-    ret = this._events[type].slice();
-  return ret;
-};
-
-EventEmitter.prototype.listenerCount = function(type) {
-  if (this._events) {
-    var evlistener = this._events[type];
-
-    if (isFunction(evlistener))
-      return 1;
-    else if (evlistener)
-      return evlistener.length;
-  }
-  return 0;
-};
-
-EventEmitter.listenerCount = function(emitter, type) {
-  return emitter.listenerCount(type);
-};
-
-function isFunction(arg) {
-  return typeof arg === 'function';
-}
-
-function isNumber(arg) {
-  return typeof arg === 'number';
-}
-
-function isObject(arg) {
-  return typeof arg === 'object' && arg !== null;
-}
-
-function isUndefined(arg) {
-  return arg === void 0;
-}
-
 
 /***/ }),
 
@@ -8188,40 +6090,6 @@ exports.write = function (buffer, value, offset, isLE, mLen, nBytes) {
   for (; eLen > 0; buffer[offset + i] = e & 0xff, i += d, e /= 256, eLen -= 8) {}
 
   buffer[offset + i - d] |= s * 128
-}
-
-
-/***/ }),
-
-/***/ "./node_modules/inherits/inherits_browser.js":
-/*!***************************************************!*\
-  !*** ./node_modules/inherits/inherits_browser.js ***!
-  \***************************************************/
-/*! no static exports found */
-/***/ (function(module, exports) {
-
-if (typeof Object.create === 'function') {
-  // implementation from standard node.js 'util' module
-  module.exports = function inherits(ctor, superCtor) {
-    ctor.super_ = superCtor
-    ctor.prototype = Object.create(superCtor.prototype, {
-      constructor: {
-        value: ctor,
-        enumerable: false,
-        writable: true,
-        configurable: true
-      }
-    });
-  };
-} else {
-  // old school shim for old browsers
-  module.exports = function inherits(ctor, superCtor) {
-    ctor.super_ = superCtor
-    var TempCtor = function () {}
-    TempCtor.prototype = superCtor.prototype
-    ctor.prototype = new TempCtor()
-    ctor.prototype.constructor = ctor
-  }
 }
 
 
@@ -12059,6 +9927,3031 @@ if ((moduleType !== 'undefined') && module.exports) {
 
 /***/ }),
 
+/***/ "./node_modules/node-libs-browser/node_modules/buffer/index.js":
+/*!*********************************************************************!*\
+  !*** ./node_modules/node-libs-browser/node_modules/buffer/index.js ***!
+  \*********************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+/* WEBPACK VAR INJECTION */(function(global) {/*!
+ * The buffer module from node.js, for the browser.
+ *
+ * @author   Feross Aboukhadijeh <http://feross.org>
+ * @license  MIT
+ */
+/* eslint-disable no-proto */
+
+
+
+var base64 = __webpack_require__(/*! base64-js */ "./node_modules/base64-js/index.js")
+var ieee754 = __webpack_require__(/*! ieee754 */ "./node_modules/ieee754/index.js")
+var isArray = __webpack_require__(/*! isarray */ "./node_modules/isarray/index.js")
+
+exports.Buffer = Buffer
+exports.SlowBuffer = SlowBuffer
+exports.INSPECT_MAX_BYTES = 50
+
+/**
+ * If `Buffer.TYPED_ARRAY_SUPPORT`:
+ *   === true    Use Uint8Array implementation (fastest)
+ *   === false   Use Object implementation (most compatible, even IE6)
+ *
+ * Browsers that support typed arrays are IE 10+, Firefox 4+, Chrome 7+, Safari 5.1+,
+ * Opera 11.6+, iOS 4.2+.
+ *
+ * Due to various browser bugs, sometimes the Object implementation will be used even
+ * when the browser supports typed arrays.
+ *
+ * Note:
+ *
+ *   - Firefox 4-29 lacks support for adding new properties to `Uint8Array` instances,
+ *     See: https://bugzilla.mozilla.org/show_bug.cgi?id=695438.
+ *
+ *   - Chrome 9-10 is missing the `TypedArray.prototype.subarray` function.
+ *
+ *   - IE10 has a broken `TypedArray.prototype.subarray` function which returns arrays of
+ *     incorrect length in some situations.
+
+ * We detect these buggy browsers and set `Buffer.TYPED_ARRAY_SUPPORT` to `false` so they
+ * get the Object implementation, which is slower but behaves correctly.
+ */
+Buffer.TYPED_ARRAY_SUPPORT = global.TYPED_ARRAY_SUPPORT !== undefined
+  ? global.TYPED_ARRAY_SUPPORT
+  : typedArraySupport()
+
+/*
+ * Export kMaxLength after typed array support is determined.
+ */
+exports.kMaxLength = kMaxLength()
+
+function typedArraySupport () {
+  try {
+    var arr = new Uint8Array(1)
+    arr.__proto__ = {__proto__: Uint8Array.prototype, foo: function () { return 42 }}
+    return arr.foo() === 42 && // typed array instances can be augmented
+        typeof arr.subarray === 'function' && // chrome 9-10 lack `subarray`
+        arr.subarray(1, 1).byteLength === 0 // ie10 has broken `subarray`
+  } catch (e) {
+    return false
+  }
+}
+
+function kMaxLength () {
+  return Buffer.TYPED_ARRAY_SUPPORT
+    ? 0x7fffffff
+    : 0x3fffffff
+}
+
+function createBuffer (that, length) {
+  if (kMaxLength() < length) {
+    throw new RangeError('Invalid typed array length')
+  }
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    // Return an augmented `Uint8Array` instance, for best performance
+    that = new Uint8Array(length)
+    that.__proto__ = Buffer.prototype
+  } else {
+    // Fallback: Return an object instance of the Buffer class
+    if (that === null) {
+      that = new Buffer(length)
+    }
+    that.length = length
+  }
+
+  return that
+}
+
+/**
+ * The Buffer constructor returns instances of `Uint8Array` that have their
+ * prototype changed to `Buffer.prototype`. Furthermore, `Buffer` is a subclass of
+ * `Uint8Array`, so the returned instances will have all the node `Buffer` methods
+ * and the `Uint8Array` methods. Square bracket notation works as expected -- it
+ * returns a single octet.
+ *
+ * The `Uint8Array` prototype remains unmodified.
+ */
+
+function Buffer (arg, encodingOrOffset, length) {
+  if (!Buffer.TYPED_ARRAY_SUPPORT && !(this instanceof Buffer)) {
+    return new Buffer(arg, encodingOrOffset, length)
+  }
+
+  // Common case.
+  if (typeof arg === 'number') {
+    if (typeof encodingOrOffset === 'string') {
+      throw new Error(
+        'If encoding is specified then the first argument must be a string'
+      )
+    }
+    return allocUnsafe(this, arg)
+  }
+  return from(this, arg, encodingOrOffset, length)
+}
+
+Buffer.poolSize = 8192 // not used by this implementation
+
+// TODO: Legacy, not needed anymore. Remove in next major version.
+Buffer._augment = function (arr) {
+  arr.__proto__ = Buffer.prototype
+  return arr
+}
+
+function from (that, value, encodingOrOffset, length) {
+  if (typeof value === 'number') {
+    throw new TypeError('"value" argument must not be a number')
+  }
+
+  if (typeof ArrayBuffer !== 'undefined' && value instanceof ArrayBuffer) {
+    return fromArrayBuffer(that, value, encodingOrOffset, length)
+  }
+
+  if (typeof value === 'string') {
+    return fromString(that, value, encodingOrOffset)
+  }
+
+  return fromObject(that, value)
+}
+
+/**
+ * Functionally equivalent to Buffer(arg, encoding) but throws a TypeError
+ * if value is a number.
+ * Buffer.from(str[, encoding])
+ * Buffer.from(array)
+ * Buffer.from(buffer)
+ * Buffer.from(arrayBuffer[, byteOffset[, length]])
+ **/
+Buffer.from = function (value, encodingOrOffset, length) {
+  return from(null, value, encodingOrOffset, length)
+}
+
+if (Buffer.TYPED_ARRAY_SUPPORT) {
+  Buffer.prototype.__proto__ = Uint8Array.prototype
+  Buffer.__proto__ = Uint8Array
+  if (typeof Symbol !== 'undefined' && Symbol.species &&
+      Buffer[Symbol.species] === Buffer) {
+    // Fix subarray() in ES2016. See: https://github.com/feross/buffer/pull/97
+    Object.defineProperty(Buffer, Symbol.species, {
+      value: null,
+      configurable: true
+    })
+  }
+}
+
+function assertSize (size) {
+  if (typeof size !== 'number') {
+    throw new TypeError('"size" argument must be a number')
+  } else if (size < 0) {
+    throw new RangeError('"size" argument must not be negative')
+  }
+}
+
+function alloc (that, size, fill, encoding) {
+  assertSize(size)
+  if (size <= 0) {
+    return createBuffer(that, size)
+  }
+  if (fill !== undefined) {
+    // Only pay attention to encoding if it's a string. This
+    // prevents accidentally sending in a number that would
+    // be interpretted as a start offset.
+    return typeof encoding === 'string'
+      ? createBuffer(that, size).fill(fill, encoding)
+      : createBuffer(that, size).fill(fill)
+  }
+  return createBuffer(that, size)
+}
+
+/**
+ * Creates a new filled Buffer instance.
+ * alloc(size[, fill[, encoding]])
+ **/
+Buffer.alloc = function (size, fill, encoding) {
+  return alloc(null, size, fill, encoding)
+}
+
+function allocUnsafe (that, size) {
+  assertSize(size)
+  that = createBuffer(that, size < 0 ? 0 : checked(size) | 0)
+  if (!Buffer.TYPED_ARRAY_SUPPORT) {
+    for (var i = 0; i < size; ++i) {
+      that[i] = 0
+    }
+  }
+  return that
+}
+
+/**
+ * Equivalent to Buffer(num), by default creates a non-zero-filled Buffer instance.
+ * */
+Buffer.allocUnsafe = function (size) {
+  return allocUnsafe(null, size)
+}
+/**
+ * Equivalent to SlowBuffer(num), by default creates a non-zero-filled Buffer instance.
+ */
+Buffer.allocUnsafeSlow = function (size) {
+  return allocUnsafe(null, size)
+}
+
+function fromString (that, string, encoding) {
+  if (typeof encoding !== 'string' || encoding === '') {
+    encoding = 'utf8'
+  }
+
+  if (!Buffer.isEncoding(encoding)) {
+    throw new TypeError('"encoding" must be a valid string encoding')
+  }
+
+  var length = byteLength(string, encoding) | 0
+  that = createBuffer(that, length)
+
+  var actual = that.write(string, encoding)
+
+  if (actual !== length) {
+    // Writing a hex string, for example, that contains invalid characters will
+    // cause everything after the first invalid character to be ignored. (e.g.
+    // 'abxxcd' will be treated as 'ab')
+    that = that.slice(0, actual)
+  }
+
+  return that
+}
+
+function fromArrayLike (that, array) {
+  var length = array.length < 0 ? 0 : checked(array.length) | 0
+  that = createBuffer(that, length)
+  for (var i = 0; i < length; i += 1) {
+    that[i] = array[i] & 255
+  }
+  return that
+}
+
+function fromArrayBuffer (that, array, byteOffset, length) {
+  array.byteLength // this throws if `array` is not a valid ArrayBuffer
+
+  if (byteOffset < 0 || array.byteLength < byteOffset) {
+    throw new RangeError('\'offset\' is out of bounds')
+  }
+
+  if (array.byteLength < byteOffset + (length || 0)) {
+    throw new RangeError('\'length\' is out of bounds')
+  }
+
+  if (byteOffset === undefined && length === undefined) {
+    array = new Uint8Array(array)
+  } else if (length === undefined) {
+    array = new Uint8Array(array, byteOffset)
+  } else {
+    array = new Uint8Array(array, byteOffset, length)
+  }
+
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    // Return an augmented `Uint8Array` instance, for best performance
+    that = array
+    that.__proto__ = Buffer.prototype
+  } else {
+    // Fallback: Return an object instance of the Buffer class
+    that = fromArrayLike(that, array)
+  }
+  return that
+}
+
+function fromObject (that, obj) {
+  if (Buffer.isBuffer(obj)) {
+    var len = checked(obj.length) | 0
+    that = createBuffer(that, len)
+
+    if (that.length === 0) {
+      return that
+    }
+
+    obj.copy(that, 0, 0, len)
+    return that
+  }
+
+  if (obj) {
+    if ((typeof ArrayBuffer !== 'undefined' &&
+        obj.buffer instanceof ArrayBuffer) || 'length' in obj) {
+      if (typeof obj.length !== 'number' || isnan(obj.length)) {
+        return createBuffer(that, 0)
+      }
+      return fromArrayLike(that, obj)
+    }
+
+    if (obj.type === 'Buffer' && isArray(obj.data)) {
+      return fromArrayLike(that, obj.data)
+    }
+  }
+
+  throw new TypeError('First argument must be a string, Buffer, ArrayBuffer, Array, or array-like object.')
+}
+
+function checked (length) {
+  // Note: cannot use `length < kMaxLength()` here because that fails when
+  // length is NaN (which is otherwise coerced to zero.)
+  if (length >= kMaxLength()) {
+    throw new RangeError('Attempt to allocate Buffer larger than maximum ' +
+                         'size: 0x' + kMaxLength().toString(16) + ' bytes')
+  }
+  return length | 0
+}
+
+function SlowBuffer (length) {
+  if (+length != length) { // eslint-disable-line eqeqeq
+    length = 0
+  }
+  return Buffer.alloc(+length)
+}
+
+Buffer.isBuffer = function isBuffer (b) {
+  return !!(b != null && b._isBuffer)
+}
+
+Buffer.compare = function compare (a, b) {
+  if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b)) {
+    throw new TypeError('Arguments must be Buffers')
+  }
+
+  if (a === b) return 0
+
+  var x = a.length
+  var y = b.length
+
+  for (var i = 0, len = Math.min(x, y); i < len; ++i) {
+    if (a[i] !== b[i]) {
+      x = a[i]
+      y = b[i]
+      break
+    }
+  }
+
+  if (x < y) return -1
+  if (y < x) return 1
+  return 0
+}
+
+Buffer.isEncoding = function isEncoding (encoding) {
+  switch (String(encoding).toLowerCase()) {
+    case 'hex':
+    case 'utf8':
+    case 'utf-8':
+    case 'ascii':
+    case 'latin1':
+    case 'binary':
+    case 'base64':
+    case 'ucs2':
+    case 'ucs-2':
+    case 'utf16le':
+    case 'utf-16le':
+      return true
+    default:
+      return false
+  }
+}
+
+Buffer.concat = function concat (list, length) {
+  if (!isArray(list)) {
+    throw new TypeError('"list" argument must be an Array of Buffers')
+  }
+
+  if (list.length === 0) {
+    return Buffer.alloc(0)
+  }
+
+  var i
+  if (length === undefined) {
+    length = 0
+    for (i = 0; i < list.length; ++i) {
+      length += list[i].length
+    }
+  }
+
+  var buffer = Buffer.allocUnsafe(length)
+  var pos = 0
+  for (i = 0; i < list.length; ++i) {
+    var buf = list[i]
+    if (!Buffer.isBuffer(buf)) {
+      throw new TypeError('"list" argument must be an Array of Buffers')
+    }
+    buf.copy(buffer, pos)
+    pos += buf.length
+  }
+  return buffer
+}
+
+function byteLength (string, encoding) {
+  if (Buffer.isBuffer(string)) {
+    return string.length
+  }
+  if (typeof ArrayBuffer !== 'undefined' && typeof ArrayBuffer.isView === 'function' &&
+      (ArrayBuffer.isView(string) || string instanceof ArrayBuffer)) {
+    return string.byteLength
+  }
+  if (typeof string !== 'string') {
+    string = '' + string
+  }
+
+  var len = string.length
+  if (len === 0) return 0
+
+  // Use a for loop to avoid recursion
+  var loweredCase = false
+  for (;;) {
+    switch (encoding) {
+      case 'ascii':
+      case 'latin1':
+      case 'binary':
+        return len
+      case 'utf8':
+      case 'utf-8':
+      case undefined:
+        return utf8ToBytes(string).length
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return len * 2
+      case 'hex':
+        return len >>> 1
+      case 'base64':
+        return base64ToBytes(string).length
+      default:
+        if (loweredCase) return utf8ToBytes(string).length // assume utf8
+        encoding = ('' + encoding).toLowerCase()
+        loweredCase = true
+    }
+  }
+}
+Buffer.byteLength = byteLength
+
+function slowToString (encoding, start, end) {
+  var loweredCase = false
+
+  // No need to verify that "this.length <= MAX_UINT32" since it's a read-only
+  // property of a typed array.
+
+  // This behaves neither like String nor Uint8Array in that we set start/end
+  // to their upper/lower bounds if the value passed is out of range.
+  // undefined is handled specially as per ECMA-262 6th Edition,
+  // Section 13.3.3.7 Runtime Semantics: KeyedBindingInitialization.
+  if (start === undefined || start < 0) {
+    start = 0
+  }
+  // Return early if start > this.length. Done here to prevent potential uint32
+  // coercion fail below.
+  if (start > this.length) {
+    return ''
+  }
+
+  if (end === undefined || end > this.length) {
+    end = this.length
+  }
+
+  if (end <= 0) {
+    return ''
+  }
+
+  // Force coersion to uint32. This will also coerce falsey/NaN values to 0.
+  end >>>= 0
+  start >>>= 0
+
+  if (end <= start) {
+    return ''
+  }
+
+  if (!encoding) encoding = 'utf8'
+
+  while (true) {
+    switch (encoding) {
+      case 'hex':
+        return hexSlice(this, start, end)
+
+      case 'utf8':
+      case 'utf-8':
+        return utf8Slice(this, start, end)
+
+      case 'ascii':
+        return asciiSlice(this, start, end)
+
+      case 'latin1':
+      case 'binary':
+        return latin1Slice(this, start, end)
+
+      case 'base64':
+        return base64Slice(this, start, end)
+
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return utf16leSlice(this, start, end)
+
+      default:
+        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
+        encoding = (encoding + '').toLowerCase()
+        loweredCase = true
+    }
+  }
+}
+
+// The property is used by `Buffer.isBuffer` and `is-buffer` (in Safari 5-7) to detect
+// Buffer instances.
+Buffer.prototype._isBuffer = true
+
+function swap (b, n, m) {
+  var i = b[n]
+  b[n] = b[m]
+  b[m] = i
+}
+
+Buffer.prototype.swap16 = function swap16 () {
+  var len = this.length
+  if (len % 2 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 16-bits')
+  }
+  for (var i = 0; i < len; i += 2) {
+    swap(this, i, i + 1)
+  }
+  return this
+}
+
+Buffer.prototype.swap32 = function swap32 () {
+  var len = this.length
+  if (len % 4 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 32-bits')
+  }
+  for (var i = 0; i < len; i += 4) {
+    swap(this, i, i + 3)
+    swap(this, i + 1, i + 2)
+  }
+  return this
+}
+
+Buffer.prototype.swap64 = function swap64 () {
+  var len = this.length
+  if (len % 8 !== 0) {
+    throw new RangeError('Buffer size must be a multiple of 64-bits')
+  }
+  for (var i = 0; i < len; i += 8) {
+    swap(this, i, i + 7)
+    swap(this, i + 1, i + 6)
+    swap(this, i + 2, i + 5)
+    swap(this, i + 3, i + 4)
+  }
+  return this
+}
+
+Buffer.prototype.toString = function toString () {
+  var length = this.length | 0
+  if (length === 0) return ''
+  if (arguments.length === 0) return utf8Slice(this, 0, length)
+  return slowToString.apply(this, arguments)
+}
+
+Buffer.prototype.equals = function equals (b) {
+  if (!Buffer.isBuffer(b)) throw new TypeError('Argument must be a Buffer')
+  if (this === b) return true
+  return Buffer.compare(this, b) === 0
+}
+
+Buffer.prototype.inspect = function inspect () {
+  var str = ''
+  var max = exports.INSPECT_MAX_BYTES
+  if (this.length > 0) {
+    str = this.toString('hex', 0, max).match(/.{2}/g).join(' ')
+    if (this.length > max) str += ' ... '
+  }
+  return '<Buffer ' + str + '>'
+}
+
+Buffer.prototype.compare = function compare (target, start, end, thisStart, thisEnd) {
+  if (!Buffer.isBuffer(target)) {
+    throw new TypeError('Argument must be a Buffer')
+  }
+
+  if (start === undefined) {
+    start = 0
+  }
+  if (end === undefined) {
+    end = target ? target.length : 0
+  }
+  if (thisStart === undefined) {
+    thisStart = 0
+  }
+  if (thisEnd === undefined) {
+    thisEnd = this.length
+  }
+
+  if (start < 0 || end > target.length || thisStart < 0 || thisEnd > this.length) {
+    throw new RangeError('out of range index')
+  }
+
+  if (thisStart >= thisEnd && start >= end) {
+    return 0
+  }
+  if (thisStart >= thisEnd) {
+    return -1
+  }
+  if (start >= end) {
+    return 1
+  }
+
+  start >>>= 0
+  end >>>= 0
+  thisStart >>>= 0
+  thisEnd >>>= 0
+
+  if (this === target) return 0
+
+  var x = thisEnd - thisStart
+  var y = end - start
+  var len = Math.min(x, y)
+
+  var thisCopy = this.slice(thisStart, thisEnd)
+  var targetCopy = target.slice(start, end)
+
+  for (var i = 0; i < len; ++i) {
+    if (thisCopy[i] !== targetCopy[i]) {
+      x = thisCopy[i]
+      y = targetCopy[i]
+      break
+    }
+  }
+
+  if (x < y) return -1
+  if (y < x) return 1
+  return 0
+}
+
+// Finds either the first index of `val` in `buffer` at offset >= `byteOffset`,
+// OR the last index of `val` in `buffer` at offset <= `byteOffset`.
+//
+// Arguments:
+// - buffer - a Buffer to search
+// - val - a string, Buffer, or number
+// - byteOffset - an index into `buffer`; will be clamped to an int32
+// - encoding - an optional encoding, relevant is val is a string
+// - dir - true for indexOf, false for lastIndexOf
+function bidirectionalIndexOf (buffer, val, byteOffset, encoding, dir) {
+  // Empty buffer means no match
+  if (buffer.length === 0) return -1
+
+  // Normalize byteOffset
+  if (typeof byteOffset === 'string') {
+    encoding = byteOffset
+    byteOffset = 0
+  } else if (byteOffset > 0x7fffffff) {
+    byteOffset = 0x7fffffff
+  } else if (byteOffset < -0x80000000) {
+    byteOffset = -0x80000000
+  }
+  byteOffset = +byteOffset  // Coerce to Number.
+  if (isNaN(byteOffset)) {
+    // byteOffset: it it's undefined, null, NaN, "foo", etc, search whole buffer
+    byteOffset = dir ? 0 : (buffer.length - 1)
+  }
+
+  // Normalize byteOffset: negative offsets start from the end of the buffer
+  if (byteOffset < 0) byteOffset = buffer.length + byteOffset
+  if (byteOffset >= buffer.length) {
+    if (dir) return -1
+    else byteOffset = buffer.length - 1
+  } else if (byteOffset < 0) {
+    if (dir) byteOffset = 0
+    else return -1
+  }
+
+  // Normalize val
+  if (typeof val === 'string') {
+    val = Buffer.from(val, encoding)
+  }
+
+  // Finally, search either indexOf (if dir is true) or lastIndexOf
+  if (Buffer.isBuffer(val)) {
+    // Special case: looking for empty string/buffer always fails
+    if (val.length === 0) {
+      return -1
+    }
+    return arrayIndexOf(buffer, val, byteOffset, encoding, dir)
+  } else if (typeof val === 'number') {
+    val = val & 0xFF // Search for a byte value [0-255]
+    if (Buffer.TYPED_ARRAY_SUPPORT &&
+        typeof Uint8Array.prototype.indexOf === 'function') {
+      if (dir) {
+        return Uint8Array.prototype.indexOf.call(buffer, val, byteOffset)
+      } else {
+        return Uint8Array.prototype.lastIndexOf.call(buffer, val, byteOffset)
+      }
+    }
+    return arrayIndexOf(buffer, [ val ], byteOffset, encoding, dir)
+  }
+
+  throw new TypeError('val must be string, number or Buffer')
+}
+
+function arrayIndexOf (arr, val, byteOffset, encoding, dir) {
+  var indexSize = 1
+  var arrLength = arr.length
+  var valLength = val.length
+
+  if (encoding !== undefined) {
+    encoding = String(encoding).toLowerCase()
+    if (encoding === 'ucs2' || encoding === 'ucs-2' ||
+        encoding === 'utf16le' || encoding === 'utf-16le') {
+      if (arr.length < 2 || val.length < 2) {
+        return -1
+      }
+      indexSize = 2
+      arrLength /= 2
+      valLength /= 2
+      byteOffset /= 2
+    }
+  }
+
+  function read (buf, i) {
+    if (indexSize === 1) {
+      return buf[i]
+    } else {
+      return buf.readUInt16BE(i * indexSize)
+    }
+  }
+
+  var i
+  if (dir) {
+    var foundIndex = -1
+    for (i = byteOffset; i < arrLength; i++) {
+      if (read(arr, i) === read(val, foundIndex === -1 ? 0 : i - foundIndex)) {
+        if (foundIndex === -1) foundIndex = i
+        if (i - foundIndex + 1 === valLength) return foundIndex * indexSize
+      } else {
+        if (foundIndex !== -1) i -= i - foundIndex
+        foundIndex = -1
+      }
+    }
+  } else {
+    if (byteOffset + valLength > arrLength) byteOffset = arrLength - valLength
+    for (i = byteOffset; i >= 0; i--) {
+      var found = true
+      for (var j = 0; j < valLength; j++) {
+        if (read(arr, i + j) !== read(val, j)) {
+          found = false
+          break
+        }
+      }
+      if (found) return i
+    }
+  }
+
+  return -1
+}
+
+Buffer.prototype.includes = function includes (val, byteOffset, encoding) {
+  return this.indexOf(val, byteOffset, encoding) !== -1
+}
+
+Buffer.prototype.indexOf = function indexOf (val, byteOffset, encoding) {
+  return bidirectionalIndexOf(this, val, byteOffset, encoding, true)
+}
+
+Buffer.prototype.lastIndexOf = function lastIndexOf (val, byteOffset, encoding) {
+  return bidirectionalIndexOf(this, val, byteOffset, encoding, false)
+}
+
+function hexWrite (buf, string, offset, length) {
+  offset = Number(offset) || 0
+  var remaining = buf.length - offset
+  if (!length) {
+    length = remaining
+  } else {
+    length = Number(length)
+    if (length > remaining) {
+      length = remaining
+    }
+  }
+
+  // must be an even number of digits
+  var strLen = string.length
+  if (strLen % 2 !== 0) throw new TypeError('Invalid hex string')
+
+  if (length > strLen / 2) {
+    length = strLen / 2
+  }
+  for (var i = 0; i < length; ++i) {
+    var parsed = parseInt(string.substr(i * 2, 2), 16)
+    if (isNaN(parsed)) return i
+    buf[offset + i] = parsed
+  }
+  return i
+}
+
+function utf8Write (buf, string, offset, length) {
+  return blitBuffer(utf8ToBytes(string, buf.length - offset), buf, offset, length)
+}
+
+function asciiWrite (buf, string, offset, length) {
+  return blitBuffer(asciiToBytes(string), buf, offset, length)
+}
+
+function latin1Write (buf, string, offset, length) {
+  return asciiWrite(buf, string, offset, length)
+}
+
+function base64Write (buf, string, offset, length) {
+  return blitBuffer(base64ToBytes(string), buf, offset, length)
+}
+
+function ucs2Write (buf, string, offset, length) {
+  return blitBuffer(utf16leToBytes(string, buf.length - offset), buf, offset, length)
+}
+
+Buffer.prototype.write = function write (string, offset, length, encoding) {
+  // Buffer#write(string)
+  if (offset === undefined) {
+    encoding = 'utf8'
+    length = this.length
+    offset = 0
+  // Buffer#write(string, encoding)
+  } else if (length === undefined && typeof offset === 'string') {
+    encoding = offset
+    length = this.length
+    offset = 0
+  // Buffer#write(string, offset[, length][, encoding])
+  } else if (isFinite(offset)) {
+    offset = offset | 0
+    if (isFinite(length)) {
+      length = length | 0
+      if (encoding === undefined) encoding = 'utf8'
+    } else {
+      encoding = length
+      length = undefined
+    }
+  // legacy write(string, encoding, offset, length) - remove in v0.13
+  } else {
+    throw new Error(
+      'Buffer.write(string, encoding, offset[, length]) is no longer supported'
+    )
+  }
+
+  var remaining = this.length - offset
+  if (length === undefined || length > remaining) length = remaining
+
+  if ((string.length > 0 && (length < 0 || offset < 0)) || offset > this.length) {
+    throw new RangeError('Attempt to write outside buffer bounds')
+  }
+
+  if (!encoding) encoding = 'utf8'
+
+  var loweredCase = false
+  for (;;) {
+    switch (encoding) {
+      case 'hex':
+        return hexWrite(this, string, offset, length)
+
+      case 'utf8':
+      case 'utf-8':
+        return utf8Write(this, string, offset, length)
+
+      case 'ascii':
+        return asciiWrite(this, string, offset, length)
+
+      case 'latin1':
+      case 'binary':
+        return latin1Write(this, string, offset, length)
+
+      case 'base64':
+        // Warning: maxLength not taken into account in base64Write
+        return base64Write(this, string, offset, length)
+
+      case 'ucs2':
+      case 'ucs-2':
+      case 'utf16le':
+      case 'utf-16le':
+        return ucs2Write(this, string, offset, length)
+
+      default:
+        if (loweredCase) throw new TypeError('Unknown encoding: ' + encoding)
+        encoding = ('' + encoding).toLowerCase()
+        loweredCase = true
+    }
+  }
+}
+
+Buffer.prototype.toJSON = function toJSON () {
+  return {
+    type: 'Buffer',
+    data: Array.prototype.slice.call(this._arr || this, 0)
+  }
+}
+
+function base64Slice (buf, start, end) {
+  if (start === 0 && end === buf.length) {
+    return base64.fromByteArray(buf)
+  } else {
+    return base64.fromByteArray(buf.slice(start, end))
+  }
+}
+
+function utf8Slice (buf, start, end) {
+  end = Math.min(buf.length, end)
+  var res = []
+
+  var i = start
+  while (i < end) {
+    var firstByte = buf[i]
+    var codePoint = null
+    var bytesPerSequence = (firstByte > 0xEF) ? 4
+      : (firstByte > 0xDF) ? 3
+      : (firstByte > 0xBF) ? 2
+      : 1
+
+    if (i + bytesPerSequence <= end) {
+      var secondByte, thirdByte, fourthByte, tempCodePoint
+
+      switch (bytesPerSequence) {
+        case 1:
+          if (firstByte < 0x80) {
+            codePoint = firstByte
+          }
+          break
+        case 2:
+          secondByte = buf[i + 1]
+          if ((secondByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0x1F) << 0x6 | (secondByte & 0x3F)
+            if (tempCodePoint > 0x7F) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 3:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0xC | (secondByte & 0x3F) << 0x6 | (thirdByte & 0x3F)
+            if (tempCodePoint > 0x7FF && (tempCodePoint < 0xD800 || tempCodePoint > 0xDFFF)) {
+              codePoint = tempCodePoint
+            }
+          }
+          break
+        case 4:
+          secondByte = buf[i + 1]
+          thirdByte = buf[i + 2]
+          fourthByte = buf[i + 3]
+          if ((secondByte & 0xC0) === 0x80 && (thirdByte & 0xC0) === 0x80 && (fourthByte & 0xC0) === 0x80) {
+            tempCodePoint = (firstByte & 0xF) << 0x12 | (secondByte & 0x3F) << 0xC | (thirdByte & 0x3F) << 0x6 | (fourthByte & 0x3F)
+            if (tempCodePoint > 0xFFFF && tempCodePoint < 0x110000) {
+              codePoint = tempCodePoint
+            }
+          }
+      }
+    }
+
+    if (codePoint === null) {
+      // we did not generate a valid codePoint so insert a
+      // replacement char (U+FFFD) and advance only 1 byte
+      codePoint = 0xFFFD
+      bytesPerSequence = 1
+    } else if (codePoint > 0xFFFF) {
+      // encode to utf16 (surrogate pair dance)
+      codePoint -= 0x10000
+      res.push(codePoint >>> 10 & 0x3FF | 0xD800)
+      codePoint = 0xDC00 | codePoint & 0x3FF
+    }
+
+    res.push(codePoint)
+    i += bytesPerSequence
+  }
+
+  return decodeCodePointsArray(res)
+}
+
+// Based on http://stackoverflow.com/a/22747272/680742, the browser with
+// the lowest limit is Chrome, with 0x10000 args.
+// We go 1 magnitude less, for safety
+var MAX_ARGUMENTS_LENGTH = 0x1000
+
+function decodeCodePointsArray (codePoints) {
+  var len = codePoints.length
+  if (len <= MAX_ARGUMENTS_LENGTH) {
+    return String.fromCharCode.apply(String, codePoints) // avoid extra slice()
+  }
+
+  // Decode in chunks to avoid "call stack size exceeded".
+  var res = ''
+  var i = 0
+  while (i < len) {
+    res += String.fromCharCode.apply(
+      String,
+      codePoints.slice(i, i += MAX_ARGUMENTS_LENGTH)
+    )
+  }
+  return res
+}
+
+function asciiSlice (buf, start, end) {
+  var ret = ''
+  end = Math.min(buf.length, end)
+
+  for (var i = start; i < end; ++i) {
+    ret += String.fromCharCode(buf[i] & 0x7F)
+  }
+  return ret
+}
+
+function latin1Slice (buf, start, end) {
+  var ret = ''
+  end = Math.min(buf.length, end)
+
+  for (var i = start; i < end; ++i) {
+    ret += String.fromCharCode(buf[i])
+  }
+  return ret
+}
+
+function hexSlice (buf, start, end) {
+  var len = buf.length
+
+  if (!start || start < 0) start = 0
+  if (!end || end < 0 || end > len) end = len
+
+  var out = ''
+  for (var i = start; i < end; ++i) {
+    out += toHex(buf[i])
+  }
+  return out
+}
+
+function utf16leSlice (buf, start, end) {
+  var bytes = buf.slice(start, end)
+  var res = ''
+  for (var i = 0; i < bytes.length; i += 2) {
+    res += String.fromCharCode(bytes[i] + bytes[i + 1] * 256)
+  }
+  return res
+}
+
+Buffer.prototype.slice = function slice (start, end) {
+  var len = this.length
+  start = ~~start
+  end = end === undefined ? len : ~~end
+
+  if (start < 0) {
+    start += len
+    if (start < 0) start = 0
+  } else if (start > len) {
+    start = len
+  }
+
+  if (end < 0) {
+    end += len
+    if (end < 0) end = 0
+  } else if (end > len) {
+    end = len
+  }
+
+  if (end < start) end = start
+
+  var newBuf
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    newBuf = this.subarray(start, end)
+    newBuf.__proto__ = Buffer.prototype
+  } else {
+    var sliceLen = end - start
+    newBuf = new Buffer(sliceLen, undefined)
+    for (var i = 0; i < sliceLen; ++i) {
+      newBuf[i] = this[i + start]
+    }
+  }
+
+  return newBuf
+}
+
+/*
+ * Need to make sure that buffer isn't trying to write out of bounds.
+ */
+function checkOffset (offset, ext, length) {
+  if ((offset % 1) !== 0 || offset < 0) throw new RangeError('offset is not uint')
+  if (offset + ext > length) throw new RangeError('Trying to access beyond buffer length')
+}
+
+Buffer.prototype.readUIntLE = function readUIntLE (offset, byteLength, noAssert) {
+  offset = offset | 0
+  byteLength = byteLength | 0
+  if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+  var val = this[offset]
+  var mul = 1
+  var i = 0
+  while (++i < byteLength && (mul *= 0x100)) {
+    val += this[offset + i] * mul
+  }
+
+  return val
+}
+
+Buffer.prototype.readUIntBE = function readUIntBE (offset, byteLength, noAssert) {
+  offset = offset | 0
+  byteLength = byteLength | 0
+  if (!noAssert) {
+    checkOffset(offset, byteLength, this.length)
+  }
+
+  var val = this[offset + --byteLength]
+  var mul = 1
+  while (byteLength > 0 && (mul *= 0x100)) {
+    val += this[offset + --byteLength] * mul
+  }
+
+  return val
+}
+
+Buffer.prototype.readUInt8 = function readUInt8 (offset, noAssert) {
+  if (!noAssert) checkOffset(offset, 1, this.length)
+  return this[offset]
+}
+
+Buffer.prototype.readUInt16LE = function readUInt16LE (offset, noAssert) {
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  return this[offset] | (this[offset + 1] << 8)
+}
+
+Buffer.prototype.readUInt16BE = function readUInt16BE (offset, noAssert) {
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  return (this[offset] << 8) | this[offset + 1]
+}
+
+Buffer.prototype.readUInt32LE = function readUInt32LE (offset, noAssert) {
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return ((this[offset]) |
+      (this[offset + 1] << 8) |
+      (this[offset + 2] << 16)) +
+      (this[offset + 3] * 0x1000000)
+}
+
+Buffer.prototype.readUInt32BE = function readUInt32BE (offset, noAssert) {
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return (this[offset] * 0x1000000) +
+    ((this[offset + 1] << 16) |
+    (this[offset + 2] << 8) |
+    this[offset + 3])
+}
+
+Buffer.prototype.readIntLE = function readIntLE (offset, byteLength, noAssert) {
+  offset = offset | 0
+  byteLength = byteLength | 0
+  if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+  var val = this[offset]
+  var mul = 1
+  var i = 0
+  while (++i < byteLength && (mul *= 0x100)) {
+    val += this[offset + i] * mul
+  }
+  mul *= 0x80
+
+  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
+
+  return val
+}
+
+Buffer.prototype.readIntBE = function readIntBE (offset, byteLength, noAssert) {
+  offset = offset | 0
+  byteLength = byteLength | 0
+  if (!noAssert) checkOffset(offset, byteLength, this.length)
+
+  var i = byteLength
+  var mul = 1
+  var val = this[offset + --i]
+  while (i > 0 && (mul *= 0x100)) {
+    val += this[offset + --i] * mul
+  }
+  mul *= 0x80
+
+  if (val >= mul) val -= Math.pow(2, 8 * byteLength)
+
+  return val
+}
+
+Buffer.prototype.readInt8 = function readInt8 (offset, noAssert) {
+  if (!noAssert) checkOffset(offset, 1, this.length)
+  if (!(this[offset] & 0x80)) return (this[offset])
+  return ((0xff - this[offset] + 1) * -1)
+}
+
+Buffer.prototype.readInt16LE = function readInt16LE (offset, noAssert) {
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  var val = this[offset] | (this[offset + 1] << 8)
+  return (val & 0x8000) ? val | 0xFFFF0000 : val
+}
+
+Buffer.prototype.readInt16BE = function readInt16BE (offset, noAssert) {
+  if (!noAssert) checkOffset(offset, 2, this.length)
+  var val = this[offset + 1] | (this[offset] << 8)
+  return (val & 0x8000) ? val | 0xFFFF0000 : val
+}
+
+Buffer.prototype.readInt32LE = function readInt32LE (offset, noAssert) {
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return (this[offset]) |
+    (this[offset + 1] << 8) |
+    (this[offset + 2] << 16) |
+    (this[offset + 3] << 24)
+}
+
+Buffer.prototype.readInt32BE = function readInt32BE (offset, noAssert) {
+  if (!noAssert) checkOffset(offset, 4, this.length)
+
+  return (this[offset] << 24) |
+    (this[offset + 1] << 16) |
+    (this[offset + 2] << 8) |
+    (this[offset + 3])
+}
+
+Buffer.prototype.readFloatLE = function readFloatLE (offset, noAssert) {
+  if (!noAssert) checkOffset(offset, 4, this.length)
+  return ieee754.read(this, offset, true, 23, 4)
+}
+
+Buffer.prototype.readFloatBE = function readFloatBE (offset, noAssert) {
+  if (!noAssert) checkOffset(offset, 4, this.length)
+  return ieee754.read(this, offset, false, 23, 4)
+}
+
+Buffer.prototype.readDoubleLE = function readDoubleLE (offset, noAssert) {
+  if (!noAssert) checkOffset(offset, 8, this.length)
+  return ieee754.read(this, offset, true, 52, 8)
+}
+
+Buffer.prototype.readDoubleBE = function readDoubleBE (offset, noAssert) {
+  if (!noAssert) checkOffset(offset, 8, this.length)
+  return ieee754.read(this, offset, false, 52, 8)
+}
+
+function checkInt (buf, value, offset, ext, max, min) {
+  if (!Buffer.isBuffer(buf)) throw new TypeError('"buffer" argument must be a Buffer instance')
+  if (value > max || value < min) throw new RangeError('"value" argument is out of bounds')
+  if (offset + ext > buf.length) throw new RangeError('Index out of range')
+}
+
+Buffer.prototype.writeUIntLE = function writeUIntLE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset | 0
+  byteLength = byteLength | 0
+  if (!noAssert) {
+    var maxBytes = Math.pow(2, 8 * byteLength) - 1
+    checkInt(this, value, offset, byteLength, maxBytes, 0)
+  }
+
+  var mul = 1
+  var i = 0
+  this[offset] = value & 0xFF
+  while (++i < byteLength && (mul *= 0x100)) {
+    this[offset + i] = (value / mul) & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeUIntBE = function writeUIntBE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset | 0
+  byteLength = byteLength | 0
+  if (!noAssert) {
+    var maxBytes = Math.pow(2, 8 * byteLength) - 1
+    checkInt(this, value, offset, byteLength, maxBytes, 0)
+  }
+
+  var i = byteLength - 1
+  var mul = 1
+  this[offset + i] = value & 0xFF
+  while (--i >= 0 && (mul *= 0x100)) {
+    this[offset + i] = (value / mul) & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeUInt8 = function writeUInt8 (value, offset, noAssert) {
+  value = +value
+  offset = offset | 0
+  if (!noAssert) checkInt(this, value, offset, 1, 0xff, 0)
+  if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
+  this[offset] = (value & 0xff)
+  return offset + 1
+}
+
+function objectWriteUInt16 (buf, value, offset, littleEndian) {
+  if (value < 0) value = 0xffff + value + 1
+  for (var i = 0, j = Math.min(buf.length - offset, 2); i < j; ++i) {
+    buf[offset + i] = (value & (0xff << (8 * (littleEndian ? i : 1 - i)))) >>>
+      (littleEndian ? i : 1 - i) * 8
+  }
+}
+
+Buffer.prototype.writeUInt16LE = function writeUInt16LE (value, offset, noAssert) {
+  value = +value
+  offset = offset | 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset] = (value & 0xff)
+    this[offset + 1] = (value >>> 8)
+  } else {
+    objectWriteUInt16(this, value, offset, true)
+  }
+  return offset + 2
+}
+
+Buffer.prototype.writeUInt16BE = function writeUInt16BE (value, offset, noAssert) {
+  value = +value
+  offset = offset | 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0xffff, 0)
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset] = (value >>> 8)
+    this[offset + 1] = (value & 0xff)
+  } else {
+    objectWriteUInt16(this, value, offset, false)
+  }
+  return offset + 2
+}
+
+function objectWriteUInt32 (buf, value, offset, littleEndian) {
+  if (value < 0) value = 0xffffffff + value + 1
+  for (var i = 0, j = Math.min(buf.length - offset, 4); i < j; ++i) {
+    buf[offset + i] = (value >>> (littleEndian ? i : 3 - i) * 8) & 0xff
+  }
+}
+
+Buffer.prototype.writeUInt32LE = function writeUInt32LE (value, offset, noAssert) {
+  value = +value
+  offset = offset | 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset + 3] = (value >>> 24)
+    this[offset + 2] = (value >>> 16)
+    this[offset + 1] = (value >>> 8)
+    this[offset] = (value & 0xff)
+  } else {
+    objectWriteUInt32(this, value, offset, true)
+  }
+  return offset + 4
+}
+
+Buffer.prototype.writeUInt32BE = function writeUInt32BE (value, offset, noAssert) {
+  value = +value
+  offset = offset | 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0xffffffff, 0)
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset] = (value >>> 24)
+    this[offset + 1] = (value >>> 16)
+    this[offset + 2] = (value >>> 8)
+    this[offset + 3] = (value & 0xff)
+  } else {
+    objectWriteUInt32(this, value, offset, false)
+  }
+  return offset + 4
+}
+
+Buffer.prototype.writeIntLE = function writeIntLE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset | 0
+  if (!noAssert) {
+    var limit = Math.pow(2, 8 * byteLength - 1)
+
+    checkInt(this, value, offset, byteLength, limit - 1, -limit)
+  }
+
+  var i = 0
+  var mul = 1
+  var sub = 0
+  this[offset] = value & 0xFF
+  while (++i < byteLength && (mul *= 0x100)) {
+    if (value < 0 && sub === 0 && this[offset + i - 1] !== 0) {
+      sub = 1
+    }
+    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeIntBE = function writeIntBE (value, offset, byteLength, noAssert) {
+  value = +value
+  offset = offset | 0
+  if (!noAssert) {
+    var limit = Math.pow(2, 8 * byteLength - 1)
+
+    checkInt(this, value, offset, byteLength, limit - 1, -limit)
+  }
+
+  var i = byteLength - 1
+  var mul = 1
+  var sub = 0
+  this[offset + i] = value & 0xFF
+  while (--i >= 0 && (mul *= 0x100)) {
+    if (value < 0 && sub === 0 && this[offset + i + 1] !== 0) {
+      sub = 1
+    }
+    this[offset + i] = ((value / mul) >> 0) - sub & 0xFF
+  }
+
+  return offset + byteLength
+}
+
+Buffer.prototype.writeInt8 = function writeInt8 (value, offset, noAssert) {
+  value = +value
+  offset = offset | 0
+  if (!noAssert) checkInt(this, value, offset, 1, 0x7f, -0x80)
+  if (!Buffer.TYPED_ARRAY_SUPPORT) value = Math.floor(value)
+  if (value < 0) value = 0xff + value + 1
+  this[offset] = (value & 0xff)
+  return offset + 1
+}
+
+Buffer.prototype.writeInt16LE = function writeInt16LE (value, offset, noAssert) {
+  value = +value
+  offset = offset | 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset] = (value & 0xff)
+    this[offset + 1] = (value >>> 8)
+  } else {
+    objectWriteUInt16(this, value, offset, true)
+  }
+  return offset + 2
+}
+
+Buffer.prototype.writeInt16BE = function writeInt16BE (value, offset, noAssert) {
+  value = +value
+  offset = offset | 0
+  if (!noAssert) checkInt(this, value, offset, 2, 0x7fff, -0x8000)
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset] = (value >>> 8)
+    this[offset + 1] = (value & 0xff)
+  } else {
+    objectWriteUInt16(this, value, offset, false)
+  }
+  return offset + 2
+}
+
+Buffer.prototype.writeInt32LE = function writeInt32LE (value, offset, noAssert) {
+  value = +value
+  offset = offset | 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset] = (value & 0xff)
+    this[offset + 1] = (value >>> 8)
+    this[offset + 2] = (value >>> 16)
+    this[offset + 3] = (value >>> 24)
+  } else {
+    objectWriteUInt32(this, value, offset, true)
+  }
+  return offset + 4
+}
+
+Buffer.prototype.writeInt32BE = function writeInt32BE (value, offset, noAssert) {
+  value = +value
+  offset = offset | 0
+  if (!noAssert) checkInt(this, value, offset, 4, 0x7fffffff, -0x80000000)
+  if (value < 0) value = 0xffffffff + value + 1
+  if (Buffer.TYPED_ARRAY_SUPPORT) {
+    this[offset] = (value >>> 24)
+    this[offset + 1] = (value >>> 16)
+    this[offset + 2] = (value >>> 8)
+    this[offset + 3] = (value & 0xff)
+  } else {
+    objectWriteUInt32(this, value, offset, false)
+  }
+  return offset + 4
+}
+
+function checkIEEE754 (buf, value, offset, ext, max, min) {
+  if (offset + ext > buf.length) throw new RangeError('Index out of range')
+  if (offset < 0) throw new RangeError('Index out of range')
+}
+
+function writeFloat (buf, value, offset, littleEndian, noAssert) {
+  if (!noAssert) {
+    checkIEEE754(buf, value, offset, 4, 3.4028234663852886e+38, -3.4028234663852886e+38)
+  }
+  ieee754.write(buf, value, offset, littleEndian, 23, 4)
+  return offset + 4
+}
+
+Buffer.prototype.writeFloatLE = function writeFloatLE (value, offset, noAssert) {
+  return writeFloat(this, value, offset, true, noAssert)
+}
+
+Buffer.prototype.writeFloatBE = function writeFloatBE (value, offset, noAssert) {
+  return writeFloat(this, value, offset, false, noAssert)
+}
+
+function writeDouble (buf, value, offset, littleEndian, noAssert) {
+  if (!noAssert) {
+    checkIEEE754(buf, value, offset, 8, 1.7976931348623157E+308, -1.7976931348623157E+308)
+  }
+  ieee754.write(buf, value, offset, littleEndian, 52, 8)
+  return offset + 8
+}
+
+Buffer.prototype.writeDoubleLE = function writeDoubleLE (value, offset, noAssert) {
+  return writeDouble(this, value, offset, true, noAssert)
+}
+
+Buffer.prototype.writeDoubleBE = function writeDoubleBE (value, offset, noAssert) {
+  return writeDouble(this, value, offset, false, noAssert)
+}
+
+// copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
+Buffer.prototype.copy = function copy (target, targetStart, start, end) {
+  if (!start) start = 0
+  if (!end && end !== 0) end = this.length
+  if (targetStart >= target.length) targetStart = target.length
+  if (!targetStart) targetStart = 0
+  if (end > 0 && end < start) end = start
+
+  // Copy 0 bytes; we're done
+  if (end === start) return 0
+  if (target.length === 0 || this.length === 0) return 0
+
+  // Fatal error conditions
+  if (targetStart < 0) {
+    throw new RangeError('targetStart out of bounds')
+  }
+  if (start < 0 || start >= this.length) throw new RangeError('sourceStart out of bounds')
+  if (end < 0) throw new RangeError('sourceEnd out of bounds')
+
+  // Are we oob?
+  if (end > this.length) end = this.length
+  if (target.length - targetStart < end - start) {
+    end = target.length - targetStart + start
+  }
+
+  var len = end - start
+  var i
+
+  if (this === target && start < targetStart && targetStart < end) {
+    // descending copy from end
+    for (i = len - 1; i >= 0; --i) {
+      target[i + targetStart] = this[i + start]
+    }
+  } else if (len < 1000 || !Buffer.TYPED_ARRAY_SUPPORT) {
+    // ascending copy from start
+    for (i = 0; i < len; ++i) {
+      target[i + targetStart] = this[i + start]
+    }
+  } else {
+    Uint8Array.prototype.set.call(
+      target,
+      this.subarray(start, start + len),
+      targetStart
+    )
+  }
+
+  return len
+}
+
+// Usage:
+//    buffer.fill(number[, offset[, end]])
+//    buffer.fill(buffer[, offset[, end]])
+//    buffer.fill(string[, offset[, end]][, encoding])
+Buffer.prototype.fill = function fill (val, start, end, encoding) {
+  // Handle string cases:
+  if (typeof val === 'string') {
+    if (typeof start === 'string') {
+      encoding = start
+      start = 0
+      end = this.length
+    } else if (typeof end === 'string') {
+      encoding = end
+      end = this.length
+    }
+    if (val.length === 1) {
+      var code = val.charCodeAt(0)
+      if (code < 256) {
+        val = code
+      }
+    }
+    if (encoding !== undefined && typeof encoding !== 'string') {
+      throw new TypeError('encoding must be a string')
+    }
+    if (typeof encoding === 'string' && !Buffer.isEncoding(encoding)) {
+      throw new TypeError('Unknown encoding: ' + encoding)
+    }
+  } else if (typeof val === 'number') {
+    val = val & 255
+  }
+
+  // Invalid ranges are not set to a default, so can range check early.
+  if (start < 0 || this.length < start || this.length < end) {
+    throw new RangeError('Out of range index')
+  }
+
+  if (end <= start) {
+    return this
+  }
+
+  start = start >>> 0
+  end = end === undefined ? this.length : end >>> 0
+
+  if (!val) val = 0
+
+  var i
+  if (typeof val === 'number') {
+    for (i = start; i < end; ++i) {
+      this[i] = val
+    }
+  } else {
+    var bytes = Buffer.isBuffer(val)
+      ? val
+      : utf8ToBytes(new Buffer(val, encoding).toString())
+    var len = bytes.length
+    for (i = 0; i < end - start; ++i) {
+      this[i + start] = bytes[i % len]
+    }
+  }
+
+  return this
+}
+
+// HELPER FUNCTIONS
+// ================
+
+var INVALID_BASE64_RE = /[^+\/0-9A-Za-z-_]/g
+
+function base64clean (str) {
+  // Node strips out invalid characters like \n and \t from the string, base64-js does not
+  str = stringtrim(str).replace(INVALID_BASE64_RE, '')
+  // Node converts strings with length < 2 to ''
+  if (str.length < 2) return ''
+  // Node allows for non-padded base64 strings (missing trailing ===), base64-js does not
+  while (str.length % 4 !== 0) {
+    str = str + '='
+  }
+  return str
+}
+
+function stringtrim (str) {
+  if (str.trim) return str.trim()
+  return str.replace(/^\s+|\s+$/g, '')
+}
+
+function toHex (n) {
+  if (n < 16) return '0' + n.toString(16)
+  return n.toString(16)
+}
+
+function utf8ToBytes (string, units) {
+  units = units || Infinity
+  var codePoint
+  var length = string.length
+  var leadSurrogate = null
+  var bytes = []
+
+  for (var i = 0; i < length; ++i) {
+    codePoint = string.charCodeAt(i)
+
+    // is surrogate component
+    if (codePoint > 0xD7FF && codePoint < 0xE000) {
+      // last char was a lead
+      if (!leadSurrogate) {
+        // no lead yet
+        if (codePoint > 0xDBFF) {
+          // unexpected trail
+          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+          continue
+        } else if (i + 1 === length) {
+          // unpaired lead
+          if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+          continue
+        }
+
+        // valid lead
+        leadSurrogate = codePoint
+
+        continue
+      }
+
+      // 2 leads in a row
+      if (codePoint < 0xDC00) {
+        if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+        leadSurrogate = codePoint
+        continue
+      }
+
+      // valid surrogate pair
+      codePoint = (leadSurrogate - 0xD800 << 10 | codePoint - 0xDC00) + 0x10000
+    } else if (leadSurrogate) {
+      // valid bmp char, but last char was a lead
+      if ((units -= 3) > -1) bytes.push(0xEF, 0xBF, 0xBD)
+    }
+
+    leadSurrogate = null
+
+    // encode utf8
+    if (codePoint < 0x80) {
+      if ((units -= 1) < 0) break
+      bytes.push(codePoint)
+    } else if (codePoint < 0x800) {
+      if ((units -= 2) < 0) break
+      bytes.push(
+        codePoint >> 0x6 | 0xC0,
+        codePoint & 0x3F | 0x80
+      )
+    } else if (codePoint < 0x10000) {
+      if ((units -= 3) < 0) break
+      bytes.push(
+        codePoint >> 0xC | 0xE0,
+        codePoint >> 0x6 & 0x3F | 0x80,
+        codePoint & 0x3F | 0x80
+      )
+    } else if (codePoint < 0x110000) {
+      if ((units -= 4) < 0) break
+      bytes.push(
+        codePoint >> 0x12 | 0xF0,
+        codePoint >> 0xC & 0x3F | 0x80,
+        codePoint >> 0x6 & 0x3F | 0x80,
+        codePoint & 0x3F | 0x80
+      )
+    } else {
+      throw new Error('Invalid code point')
+    }
+  }
+
+  return bytes
+}
+
+function asciiToBytes (str) {
+  var byteArray = []
+  for (var i = 0; i < str.length; ++i) {
+    // Node's code seems to be doing this and not & 0x7F..
+    byteArray.push(str.charCodeAt(i) & 0xFF)
+  }
+  return byteArray
+}
+
+function utf16leToBytes (str, units) {
+  var c, hi, lo
+  var byteArray = []
+  for (var i = 0; i < str.length; ++i) {
+    if ((units -= 2) < 0) break
+
+    c = str.charCodeAt(i)
+    hi = c >> 8
+    lo = c % 256
+    byteArray.push(lo)
+    byteArray.push(hi)
+  }
+
+  return byteArray
+}
+
+function base64ToBytes (str) {
+  return base64.toByteArray(base64clean(str))
+}
+
+function blitBuffer (src, dst, offset, length) {
+  for (var i = 0; i < length; ++i) {
+    if ((i + offset >= dst.length) || (i >= src.length)) break
+    dst[i + offset] = src[i]
+  }
+  return i
+}
+
+function isnan (val) {
+  return val !== val // eslint-disable-line no-self-compare
+}
+
+/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../../../webpack/buildin/global.js */ "./node_modules/webpack/buildin/global.js")))
+
+/***/ }),
+
+/***/ "./node_modules/node-libs-browser/node_modules/events/events.js":
+/*!**********************************************************************!*\
+  !*** ./node_modules/node-libs-browser/node_modules/events/events.js ***!
+  \**********************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+
+var R = typeof Reflect === 'object' ? Reflect : null
+var ReflectApply = R && typeof R.apply === 'function'
+  ? R.apply
+  : function ReflectApply(target, receiver, args) {
+    return Function.prototype.apply.call(target, receiver, args);
+  }
+
+var ReflectOwnKeys
+if (R && typeof R.ownKeys === 'function') {
+  ReflectOwnKeys = R.ownKeys
+} else if (Object.getOwnPropertySymbols) {
+  ReflectOwnKeys = function ReflectOwnKeys(target) {
+    return Object.getOwnPropertyNames(target)
+      .concat(Object.getOwnPropertySymbols(target));
+  };
+} else {
+  ReflectOwnKeys = function ReflectOwnKeys(target) {
+    return Object.getOwnPropertyNames(target);
+  };
+}
+
+function ProcessEmitWarning(warning) {
+  if (console && console.warn) console.warn(warning);
+}
+
+var NumberIsNaN = Number.isNaN || function NumberIsNaN(value) {
+  return value !== value;
+}
+
+function EventEmitter() {
+  EventEmitter.init.call(this);
+}
+module.exports = EventEmitter;
+
+// Backwards-compat with node 0.10.x
+EventEmitter.EventEmitter = EventEmitter;
+
+EventEmitter.prototype._events = undefined;
+EventEmitter.prototype._eventsCount = 0;
+EventEmitter.prototype._maxListeners = undefined;
+
+// By default EventEmitters will print a warning if more than 10 listeners are
+// added to it. This is a useful default which helps finding memory leaks.
+var defaultMaxListeners = 10;
+
+function checkListener(listener) {
+  if (typeof listener !== 'function') {
+    throw new TypeError('The "listener" argument must be of type Function. Received type ' + typeof listener);
+  }
+}
+
+Object.defineProperty(EventEmitter, 'defaultMaxListeners', {
+  enumerable: true,
+  get: function() {
+    return defaultMaxListeners;
+  },
+  set: function(arg) {
+    if (typeof arg !== 'number' || arg < 0 || NumberIsNaN(arg)) {
+      throw new RangeError('The value of "defaultMaxListeners" is out of range. It must be a non-negative number. Received ' + arg + '.');
+    }
+    defaultMaxListeners = arg;
+  }
+});
+
+EventEmitter.init = function() {
+
+  if (this._events === undefined ||
+      this._events === Object.getPrototypeOf(this)._events) {
+    this._events = Object.create(null);
+    this._eventsCount = 0;
+  }
+
+  this._maxListeners = this._maxListeners || undefined;
+};
+
+// Obviously not all Emitters should be limited to 10. This function allows
+// that to be increased. Set to zero for unlimited.
+EventEmitter.prototype.setMaxListeners = function setMaxListeners(n) {
+  if (typeof n !== 'number' || n < 0 || NumberIsNaN(n)) {
+    throw new RangeError('The value of "n" is out of range. It must be a non-negative number. Received ' + n + '.');
+  }
+  this._maxListeners = n;
+  return this;
+};
+
+function _getMaxListeners(that) {
+  if (that._maxListeners === undefined)
+    return EventEmitter.defaultMaxListeners;
+  return that._maxListeners;
+}
+
+EventEmitter.prototype.getMaxListeners = function getMaxListeners() {
+  return _getMaxListeners(this);
+};
+
+EventEmitter.prototype.emit = function emit(type) {
+  var args = [];
+  for (var i = 1; i < arguments.length; i++) args.push(arguments[i]);
+  var doError = (type === 'error');
+
+  var events = this._events;
+  if (events !== undefined)
+    doError = (doError && events.error === undefined);
+  else if (!doError)
+    return false;
+
+  // If there is no 'error' event listener then throw.
+  if (doError) {
+    var er;
+    if (args.length > 0)
+      er = args[0];
+    if (er instanceof Error) {
+      // Note: The comments on the `throw` lines are intentional, they show
+      // up in Node's output if this results in an unhandled exception.
+      throw er; // Unhandled 'error' event
+    }
+    // At least give some kind of context to the user
+    var err = new Error('Unhandled error.' + (er ? ' (' + er.message + ')' : ''));
+    err.context = er;
+    throw err; // Unhandled 'error' event
+  }
+
+  var handler = events[type];
+
+  if (handler === undefined)
+    return false;
+
+  if (typeof handler === 'function') {
+    ReflectApply(handler, this, args);
+  } else {
+    var len = handler.length;
+    var listeners = arrayClone(handler, len);
+    for (var i = 0; i < len; ++i)
+      ReflectApply(listeners[i], this, args);
+  }
+
+  return true;
+};
+
+function _addListener(target, type, listener, prepend) {
+  var m;
+  var events;
+  var existing;
+
+  checkListener(listener);
+
+  events = target._events;
+  if (events === undefined) {
+    events = target._events = Object.create(null);
+    target._eventsCount = 0;
+  } else {
+    // To avoid recursion in the case that type === "newListener"! Before
+    // adding it to the listeners, first emit "newListener".
+    if (events.newListener !== undefined) {
+      target.emit('newListener', type,
+                  listener.listener ? listener.listener : listener);
+
+      // Re-assign `events` because a newListener handler could have caused the
+      // this._events to be assigned to a new object
+      events = target._events;
+    }
+    existing = events[type];
+  }
+
+  if (existing === undefined) {
+    // Optimize the case of one listener. Don't need the extra array object.
+    existing = events[type] = listener;
+    ++target._eventsCount;
+  } else {
+    if (typeof existing === 'function') {
+      // Adding the second element, need to change to array.
+      existing = events[type] =
+        prepend ? [listener, existing] : [existing, listener];
+      // If we've already got an array, just append.
+    } else if (prepend) {
+      existing.unshift(listener);
+    } else {
+      existing.push(listener);
+    }
+
+    // Check for listener leak
+    m = _getMaxListeners(target);
+    if (m > 0 && existing.length > m && !existing.warned) {
+      existing.warned = true;
+      // No error code for this since it is a Warning
+      // eslint-disable-next-line no-restricted-syntax
+      var w = new Error('Possible EventEmitter memory leak detected. ' +
+                          existing.length + ' ' + String(type) + ' listeners ' +
+                          'added. Use emitter.setMaxListeners() to ' +
+                          'increase limit');
+      w.name = 'MaxListenersExceededWarning';
+      w.emitter = target;
+      w.type = type;
+      w.count = existing.length;
+      ProcessEmitWarning(w);
+    }
+  }
+
+  return target;
+}
+
+EventEmitter.prototype.addListener = function addListener(type, listener) {
+  return _addListener(this, type, listener, false);
+};
+
+EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+
+EventEmitter.prototype.prependListener =
+    function prependListener(type, listener) {
+      return _addListener(this, type, listener, true);
+    };
+
+function onceWrapper() {
+  if (!this.fired) {
+    this.target.removeListener(this.type, this.wrapFn);
+    this.fired = true;
+    if (arguments.length === 0)
+      return this.listener.call(this.target);
+    return this.listener.apply(this.target, arguments);
+  }
+}
+
+function _onceWrap(target, type, listener) {
+  var state = { fired: false, wrapFn: undefined, target: target, type: type, listener: listener };
+  var wrapped = onceWrapper.bind(state);
+  wrapped.listener = listener;
+  state.wrapFn = wrapped;
+  return wrapped;
+}
+
+EventEmitter.prototype.once = function once(type, listener) {
+  checkListener(listener);
+  this.on(type, _onceWrap(this, type, listener));
+  return this;
+};
+
+EventEmitter.prototype.prependOnceListener =
+    function prependOnceListener(type, listener) {
+      checkListener(listener);
+      this.prependListener(type, _onceWrap(this, type, listener));
+      return this;
+    };
+
+// Emits a 'removeListener' event if and only if the listener was removed.
+EventEmitter.prototype.removeListener =
+    function removeListener(type, listener) {
+      var list, events, position, i, originalListener;
+
+      checkListener(listener);
+
+      events = this._events;
+      if (events === undefined)
+        return this;
+
+      list = events[type];
+      if (list === undefined)
+        return this;
+
+      if (list === listener || list.listener === listener) {
+        if (--this._eventsCount === 0)
+          this._events = Object.create(null);
+        else {
+          delete events[type];
+          if (events.removeListener)
+            this.emit('removeListener', type, list.listener || listener);
+        }
+      } else if (typeof list !== 'function') {
+        position = -1;
+
+        for (i = list.length - 1; i >= 0; i--) {
+          if (list[i] === listener || list[i].listener === listener) {
+            originalListener = list[i].listener;
+            position = i;
+            break;
+          }
+        }
+
+        if (position < 0)
+          return this;
+
+        if (position === 0)
+          list.shift();
+        else {
+          spliceOne(list, position);
+        }
+
+        if (list.length === 1)
+          events[type] = list[0];
+
+        if (events.removeListener !== undefined)
+          this.emit('removeListener', type, originalListener || listener);
+      }
+
+      return this;
+    };
+
+EventEmitter.prototype.off = EventEmitter.prototype.removeListener;
+
+EventEmitter.prototype.removeAllListeners =
+    function removeAllListeners(type) {
+      var listeners, events, i;
+
+      events = this._events;
+      if (events === undefined)
+        return this;
+
+      // not listening for removeListener, no need to emit
+      if (events.removeListener === undefined) {
+        if (arguments.length === 0) {
+          this._events = Object.create(null);
+          this._eventsCount = 0;
+        } else if (events[type] !== undefined) {
+          if (--this._eventsCount === 0)
+            this._events = Object.create(null);
+          else
+            delete events[type];
+        }
+        return this;
+      }
+
+      // emit removeListener for all listeners on all events
+      if (arguments.length === 0) {
+        var keys = Object.keys(events);
+        var key;
+        for (i = 0; i < keys.length; ++i) {
+          key = keys[i];
+          if (key === 'removeListener') continue;
+          this.removeAllListeners(key);
+        }
+        this.removeAllListeners('removeListener');
+        this._events = Object.create(null);
+        this._eventsCount = 0;
+        return this;
+      }
+
+      listeners = events[type];
+
+      if (typeof listeners === 'function') {
+        this.removeListener(type, listeners);
+      } else if (listeners !== undefined) {
+        // LIFO order
+        for (i = listeners.length - 1; i >= 0; i--) {
+          this.removeListener(type, listeners[i]);
+        }
+      }
+
+      return this;
+    };
+
+function _listeners(target, type, unwrap) {
+  var events = target._events;
+
+  if (events === undefined)
+    return [];
+
+  var evlistener = events[type];
+  if (evlistener === undefined)
+    return [];
+
+  if (typeof evlistener === 'function')
+    return unwrap ? [evlistener.listener || evlistener] : [evlistener];
+
+  return unwrap ?
+    unwrapListeners(evlistener) : arrayClone(evlistener, evlistener.length);
+}
+
+EventEmitter.prototype.listeners = function listeners(type) {
+  return _listeners(this, type, true);
+};
+
+EventEmitter.prototype.rawListeners = function rawListeners(type) {
+  return _listeners(this, type, false);
+};
+
+EventEmitter.listenerCount = function(emitter, type) {
+  if (typeof emitter.listenerCount === 'function') {
+    return emitter.listenerCount(type);
+  } else {
+    return listenerCount.call(emitter, type);
+  }
+};
+
+EventEmitter.prototype.listenerCount = listenerCount;
+function listenerCount(type) {
+  var events = this._events;
+
+  if (events !== undefined) {
+    var evlistener = events[type];
+
+    if (typeof evlistener === 'function') {
+      return 1;
+    } else if (evlistener !== undefined) {
+      return evlistener.length;
+    }
+  }
+
+  return 0;
+}
+
+EventEmitter.prototype.eventNames = function eventNames() {
+  return this._eventsCount > 0 ? ReflectOwnKeys(this._events) : [];
+};
+
+function arrayClone(arr, n) {
+  var copy = new Array(n);
+  for (var i = 0; i < n; ++i)
+    copy[i] = arr[i];
+  return copy;
+}
+
+function spliceOne(list, index) {
+  for (; index + 1 < list.length; index++)
+    list[index] = list[index + 1];
+  list.pop();
+}
+
+function unwrapListeners(arr) {
+  var ret = new Array(arr.length);
+  for (var i = 0; i < ret.length; ++i) {
+    ret[i] = arr[i].listener || arr[i];
+  }
+  return ret;
+}
+
+
+/***/ }),
+
+/***/ "./node_modules/node-libs-browser/node_modules/util/node_modules/inherits/inherits_browser.js":
+/*!****************************************************************************************************!*\
+  !*** ./node_modules/node-libs-browser/node_modules/util/node_modules/inherits/inherits_browser.js ***!
+  \****************************************************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+if (typeof Object.create === 'function') {
+  // implementation from standard node.js 'util' module
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    ctor.prototype = Object.create(superCtor.prototype, {
+      constructor: {
+        value: ctor,
+        enumerable: false,
+        writable: true,
+        configurable: true
+      }
+    });
+  };
+} else {
+  // old school shim for old browsers
+  module.exports = function inherits(ctor, superCtor) {
+    ctor.super_ = superCtor
+    var TempCtor = function () {}
+    TempCtor.prototype = superCtor.prototype
+    ctor.prototype = new TempCtor()
+    ctor.prototype.constructor = ctor
+  }
+}
+
+
+/***/ }),
+
+/***/ "./node_modules/node-libs-browser/node_modules/util/support/isBufferBrowser.js":
+/*!*************************************************************************************!*\
+  !*** ./node_modules/node-libs-browser/node_modules/util/support/isBufferBrowser.js ***!
+  \*************************************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports) {
+
+module.exports = function isBuffer(arg) {
+  return arg && typeof arg === 'object'
+    && typeof arg.copy === 'function'
+    && typeof arg.fill === 'function'
+    && typeof arg.readUInt8 === 'function';
+}
+
+/***/ }),
+
+/***/ "./node_modules/node-libs-browser/node_modules/util/util.js":
+/*!******************************************************************!*\
+  !*** ./node_modules/node-libs-browser/node_modules/util/util.js ***!
+  \******************************************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+/* WEBPACK VAR INJECTION */(function(process) {// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+var getOwnPropertyDescriptors = Object.getOwnPropertyDescriptors ||
+  function getOwnPropertyDescriptors(obj) {
+    var keys = Object.keys(obj);
+    var descriptors = {};
+    for (var i = 0; i < keys.length; i++) {
+      descriptors[keys[i]] = Object.getOwnPropertyDescriptor(obj, keys[i]);
+    }
+    return descriptors;
+  };
+
+var formatRegExp = /%[sdj%]/g;
+exports.format = function(f) {
+  if (!isString(f)) {
+    var objects = [];
+    for (var i = 0; i < arguments.length; i++) {
+      objects.push(inspect(arguments[i]));
+    }
+    return objects.join(' ');
+  }
+
+  var i = 1;
+  var args = arguments;
+  var len = args.length;
+  var str = String(f).replace(formatRegExp, function(x) {
+    if (x === '%%') return '%';
+    if (i >= len) return x;
+    switch (x) {
+      case '%s': return String(args[i++]);
+      case '%d': return Number(args[i++]);
+      case '%j':
+        try {
+          return JSON.stringify(args[i++]);
+        } catch (_) {
+          return '[Circular]';
+        }
+      default:
+        return x;
+    }
+  });
+  for (var x = args[i]; i < len; x = args[++i]) {
+    if (isNull(x) || !isObject(x)) {
+      str += ' ' + x;
+    } else {
+      str += ' ' + inspect(x);
+    }
+  }
+  return str;
+};
+
+
+// Mark that a method should not be used.
+// Returns a modified function which warns once by default.
+// If --no-deprecation is set, then it is a no-op.
+exports.deprecate = function(fn, msg) {
+  if (typeof process !== 'undefined' && process.noDeprecation === true) {
+    return fn;
+  }
+
+  // Allow for deprecating things in the process of starting up.
+  if (typeof process === 'undefined') {
+    return function() {
+      return exports.deprecate(fn, msg).apply(this, arguments);
+    };
+  }
+
+  var warned = false;
+  function deprecated() {
+    if (!warned) {
+      if (process.throwDeprecation) {
+        throw new Error(msg);
+      } else if (process.traceDeprecation) {
+        console.trace(msg);
+      } else {
+        console.error(msg);
+      }
+      warned = true;
+    }
+    return fn.apply(this, arguments);
+  }
+
+  return deprecated;
+};
+
+
+var debugs = {};
+var debugEnviron;
+exports.debuglog = function(set) {
+  if (isUndefined(debugEnviron))
+    debugEnviron = process.env.NODE_DEBUG || '';
+  set = set.toUpperCase();
+  if (!debugs[set]) {
+    if (new RegExp('\\b' + set + '\\b', 'i').test(debugEnviron)) {
+      var pid = process.pid;
+      debugs[set] = function() {
+        var msg = exports.format.apply(exports, arguments);
+        console.error('%s %d: %s', set, pid, msg);
+      };
+    } else {
+      debugs[set] = function() {};
+    }
+  }
+  return debugs[set];
+};
+
+
+/**
+ * Echos the value of a value. Trys to print the value out
+ * in the best way possible given the different types.
+ *
+ * @param {Object} obj The object to print out.
+ * @param {Object} opts Optional options object that alters the output.
+ */
+/* legacy: obj, showHidden, depth, colors*/
+function inspect(obj, opts) {
+  // default options
+  var ctx = {
+    seen: [],
+    stylize: stylizeNoColor
+  };
+  // legacy...
+  if (arguments.length >= 3) ctx.depth = arguments[2];
+  if (arguments.length >= 4) ctx.colors = arguments[3];
+  if (isBoolean(opts)) {
+    // legacy...
+    ctx.showHidden = opts;
+  } else if (opts) {
+    // got an "options" object
+    exports._extend(ctx, opts);
+  }
+  // set default options
+  if (isUndefined(ctx.showHidden)) ctx.showHidden = false;
+  if (isUndefined(ctx.depth)) ctx.depth = 2;
+  if (isUndefined(ctx.colors)) ctx.colors = false;
+  if (isUndefined(ctx.customInspect)) ctx.customInspect = true;
+  if (ctx.colors) ctx.stylize = stylizeWithColor;
+  return formatValue(ctx, obj, ctx.depth);
+}
+exports.inspect = inspect;
+
+
+// http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
+inspect.colors = {
+  'bold' : [1, 22],
+  'italic' : [3, 23],
+  'underline' : [4, 24],
+  'inverse' : [7, 27],
+  'white' : [37, 39],
+  'grey' : [90, 39],
+  'black' : [30, 39],
+  'blue' : [34, 39],
+  'cyan' : [36, 39],
+  'green' : [32, 39],
+  'magenta' : [35, 39],
+  'red' : [31, 39],
+  'yellow' : [33, 39]
+};
+
+// Don't use 'blue' not visible on cmd.exe
+inspect.styles = {
+  'special': 'cyan',
+  'number': 'yellow',
+  'boolean': 'yellow',
+  'undefined': 'grey',
+  'null': 'bold',
+  'string': 'green',
+  'date': 'magenta',
+  // "name": intentionally not styling
+  'regexp': 'red'
+};
+
+
+function stylizeWithColor(str, styleType) {
+  var style = inspect.styles[styleType];
+
+  if (style) {
+    return '\u001b[' + inspect.colors[style][0] + 'm' + str +
+           '\u001b[' + inspect.colors[style][1] + 'm';
+  } else {
+    return str;
+  }
+}
+
+
+function stylizeNoColor(str, styleType) {
+  return str;
+}
+
+
+function arrayToHash(array) {
+  var hash = {};
+
+  array.forEach(function(val, idx) {
+    hash[val] = true;
+  });
+
+  return hash;
+}
+
+
+function formatValue(ctx, value, recurseTimes) {
+  // Provide a hook for user-specified inspect functions.
+  // Check that value is an object with an inspect function on it
+  if (ctx.customInspect &&
+      value &&
+      isFunction(value.inspect) &&
+      // Filter out the util module, it's inspect function is special
+      value.inspect !== exports.inspect &&
+      // Also filter out any prototype objects using the circular check.
+      !(value.constructor && value.constructor.prototype === value)) {
+    var ret = value.inspect(recurseTimes, ctx);
+    if (!isString(ret)) {
+      ret = formatValue(ctx, ret, recurseTimes);
+    }
+    return ret;
+  }
+
+  // Primitive types cannot have properties
+  var primitive = formatPrimitive(ctx, value);
+  if (primitive) {
+    return primitive;
+  }
+
+  // Look up the keys of the object.
+  var keys = Object.keys(value);
+  var visibleKeys = arrayToHash(keys);
+
+  if (ctx.showHidden) {
+    keys = Object.getOwnPropertyNames(value);
+  }
+
+  // IE doesn't make error fields non-enumerable
+  // http://msdn.microsoft.com/en-us/library/ie/dww52sbt(v=vs.94).aspx
+  if (isError(value)
+      && (keys.indexOf('message') >= 0 || keys.indexOf('description') >= 0)) {
+    return formatError(value);
+  }
+
+  // Some type of object without properties can be shortcutted.
+  if (keys.length === 0) {
+    if (isFunction(value)) {
+      var name = value.name ? ': ' + value.name : '';
+      return ctx.stylize('[Function' + name + ']', 'special');
+    }
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    }
+    if (isDate(value)) {
+      return ctx.stylize(Date.prototype.toString.call(value), 'date');
+    }
+    if (isError(value)) {
+      return formatError(value);
+    }
+  }
+
+  var base = '', array = false, braces = ['{', '}'];
+
+  // Make Array say that they are Array
+  if (isArray(value)) {
+    array = true;
+    braces = ['[', ']'];
+  }
+
+  // Make functions say that they are functions
+  if (isFunction(value)) {
+    var n = value.name ? ': ' + value.name : '';
+    base = ' [Function' + n + ']';
+  }
+
+  // Make RegExps say that they are RegExps
+  if (isRegExp(value)) {
+    base = ' ' + RegExp.prototype.toString.call(value);
+  }
+
+  // Make dates with properties first say the date
+  if (isDate(value)) {
+    base = ' ' + Date.prototype.toUTCString.call(value);
+  }
+
+  // Make error with message first say the error
+  if (isError(value)) {
+    base = ' ' + formatError(value);
+  }
+
+  if (keys.length === 0 && (!array || value.length == 0)) {
+    return braces[0] + base + braces[1];
+  }
+
+  if (recurseTimes < 0) {
+    if (isRegExp(value)) {
+      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
+    } else {
+      return ctx.stylize('[Object]', 'special');
+    }
+  }
+
+  ctx.seen.push(value);
+
+  var output;
+  if (array) {
+    output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);
+  } else {
+    output = keys.map(function(key) {
+      return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);
+    });
+  }
+
+  ctx.seen.pop();
+
+  return reduceToSingleString(output, base, braces);
+}
+
+
+function formatPrimitive(ctx, value) {
+  if (isUndefined(value))
+    return ctx.stylize('undefined', 'undefined');
+  if (isString(value)) {
+    var simple = '\'' + JSON.stringify(value).replace(/^"|"$/g, '')
+                                             .replace(/'/g, "\\'")
+                                             .replace(/\\"/g, '"') + '\'';
+    return ctx.stylize(simple, 'string');
+  }
+  if (isNumber(value))
+    return ctx.stylize('' + value, 'number');
+  if (isBoolean(value))
+    return ctx.stylize('' + value, 'boolean');
+  // For some reason typeof null is "object", so special case here.
+  if (isNull(value))
+    return ctx.stylize('null', 'null');
+}
+
+
+function formatError(value) {
+  return '[' + Error.prototype.toString.call(value) + ']';
+}
+
+
+function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
+  var output = [];
+  for (var i = 0, l = value.length; i < l; ++i) {
+    if (hasOwnProperty(value, String(i))) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          String(i), true));
+    } else {
+      output.push('');
+    }
+  }
+  keys.forEach(function(key) {
+    if (!key.match(/^\d+$/)) {
+      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
+          key, true));
+    }
+  });
+  return output;
+}
+
+
+function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
+  var name, str, desc;
+  desc = Object.getOwnPropertyDescriptor(value, key) || { value: value[key] };
+  if (desc.get) {
+    if (desc.set) {
+      str = ctx.stylize('[Getter/Setter]', 'special');
+    } else {
+      str = ctx.stylize('[Getter]', 'special');
+    }
+  } else {
+    if (desc.set) {
+      str = ctx.stylize('[Setter]', 'special');
+    }
+  }
+  if (!hasOwnProperty(visibleKeys, key)) {
+    name = '[' + key + ']';
+  }
+  if (!str) {
+    if (ctx.seen.indexOf(desc.value) < 0) {
+      if (isNull(recurseTimes)) {
+        str = formatValue(ctx, desc.value, null);
+      } else {
+        str = formatValue(ctx, desc.value, recurseTimes - 1);
+      }
+      if (str.indexOf('\n') > -1) {
+        if (array) {
+          str = str.split('\n').map(function(line) {
+            return '  ' + line;
+          }).join('\n').substr(2);
+        } else {
+          str = '\n' + str.split('\n').map(function(line) {
+            return '   ' + line;
+          }).join('\n');
+        }
+      }
+    } else {
+      str = ctx.stylize('[Circular]', 'special');
+    }
+  }
+  if (isUndefined(name)) {
+    if (array && key.match(/^\d+$/)) {
+      return str;
+    }
+    name = JSON.stringify('' + key);
+    if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
+      name = name.substr(1, name.length - 2);
+      name = ctx.stylize(name, 'name');
+    } else {
+      name = name.replace(/'/g, "\\'")
+                 .replace(/\\"/g, '"')
+                 .replace(/(^"|"$)/g, "'");
+      name = ctx.stylize(name, 'string');
+    }
+  }
+
+  return name + ': ' + str;
+}
+
+
+function reduceToSingleString(output, base, braces) {
+  var numLinesEst = 0;
+  var length = output.reduce(function(prev, cur) {
+    numLinesEst++;
+    if (cur.indexOf('\n') >= 0) numLinesEst++;
+    return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1;
+  }, 0);
+
+  if (length > 60) {
+    return braces[0] +
+           (base === '' ? '' : base + '\n ') +
+           ' ' +
+           output.join(',\n  ') +
+           ' ' +
+           braces[1];
+  }
+
+  return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1];
+}
+
+
+// NOTE: These type checking functions intentionally don't use `instanceof`
+// because it is fragile and can be easily faked with `Object.create()`.
+function isArray(ar) {
+  return Array.isArray(ar);
+}
+exports.isArray = isArray;
+
+function isBoolean(arg) {
+  return typeof arg === 'boolean';
+}
+exports.isBoolean = isBoolean;
+
+function isNull(arg) {
+  return arg === null;
+}
+exports.isNull = isNull;
+
+function isNullOrUndefined(arg) {
+  return arg == null;
+}
+exports.isNullOrUndefined = isNullOrUndefined;
+
+function isNumber(arg) {
+  return typeof arg === 'number';
+}
+exports.isNumber = isNumber;
+
+function isString(arg) {
+  return typeof arg === 'string';
+}
+exports.isString = isString;
+
+function isSymbol(arg) {
+  return typeof arg === 'symbol';
+}
+exports.isSymbol = isSymbol;
+
+function isUndefined(arg) {
+  return arg === void 0;
+}
+exports.isUndefined = isUndefined;
+
+function isRegExp(re) {
+  return isObject(re) && objectToString(re) === '[object RegExp]';
+}
+exports.isRegExp = isRegExp;
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg !== null;
+}
+exports.isObject = isObject;
+
+function isDate(d) {
+  return isObject(d) && objectToString(d) === '[object Date]';
+}
+exports.isDate = isDate;
+
+function isError(e) {
+  return isObject(e) &&
+      (objectToString(e) === '[object Error]' || e instanceof Error);
+}
+exports.isError = isError;
+
+function isFunction(arg) {
+  return typeof arg === 'function';
+}
+exports.isFunction = isFunction;
+
+function isPrimitive(arg) {
+  return arg === null ||
+         typeof arg === 'boolean' ||
+         typeof arg === 'number' ||
+         typeof arg === 'string' ||
+         typeof arg === 'symbol' ||  // ES6 symbol
+         typeof arg === 'undefined';
+}
+exports.isPrimitive = isPrimitive;
+
+exports.isBuffer = __webpack_require__(/*! ./support/isBuffer */ "./node_modules/node-libs-browser/node_modules/util/support/isBufferBrowser.js");
+
+function objectToString(o) {
+  return Object.prototype.toString.call(o);
+}
+
+
+function pad(n) {
+  return n < 10 ? '0' + n.toString(10) : n.toString(10);
+}
+
+
+var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
+              'Oct', 'Nov', 'Dec'];
+
+// 26 Feb 16:19:34
+function timestamp() {
+  var d = new Date();
+  var time = [pad(d.getHours()),
+              pad(d.getMinutes()),
+              pad(d.getSeconds())].join(':');
+  return [d.getDate(), months[d.getMonth()], time].join(' ');
+}
+
+
+// log is just a thin wrapper to console.log that prepends a timestamp
+exports.log = function() {
+  console.log('%s - %s', timestamp(), exports.format.apply(exports, arguments));
+};
+
+
+/**
+ * Inherit the prototype methods from one constructor into another.
+ *
+ * The Function.prototype.inherits from lang.js rewritten as a standalone
+ * function (not on Function.prototype). NOTE: If this file is to be loaded
+ * during bootstrapping this function needs to be rewritten using some native
+ * functions as prototype setup using normal JavaScript does not work as
+ * expected during bootstrapping (see mirror.js in r114903).
+ *
+ * @param {function} ctor Constructor function which needs to inherit the
+ *     prototype.
+ * @param {function} superCtor Constructor function to inherit prototype from.
+ */
+exports.inherits = __webpack_require__(/*! inherits */ "./node_modules/node-libs-browser/node_modules/util/node_modules/inherits/inherits_browser.js");
+
+exports._extend = function(origin, add) {
+  // Don't do anything if add isn't an object
+  if (!add || !isObject(add)) return origin;
+
+  var keys = Object.keys(add);
+  var i = keys.length;
+  while (i--) {
+    origin[keys[i]] = add[keys[i]];
+  }
+  return origin;
+};
+
+function hasOwnProperty(obj, prop) {
+  return Object.prototype.hasOwnProperty.call(obj, prop);
+}
+
+var kCustomPromisifiedSymbol = typeof Symbol !== 'undefined' ? Symbol('util.promisify.custom') : undefined;
+
+exports.promisify = function promisify(original) {
+  if (typeof original !== 'function')
+    throw new TypeError('The "original" argument must be of type Function');
+
+  if (kCustomPromisifiedSymbol && original[kCustomPromisifiedSymbol]) {
+    var fn = original[kCustomPromisifiedSymbol];
+    if (typeof fn !== 'function') {
+      throw new TypeError('The "util.promisify.custom" argument must be of type Function');
+    }
+    Object.defineProperty(fn, kCustomPromisifiedSymbol, {
+      value: fn, enumerable: false, writable: false, configurable: true
+    });
+    return fn;
+  }
+
+  function fn() {
+    var promiseResolve, promiseReject;
+    var promise = new Promise(function (resolve, reject) {
+      promiseResolve = resolve;
+      promiseReject = reject;
+    });
+
+    var args = [];
+    for (var i = 0; i < arguments.length; i++) {
+      args.push(arguments[i]);
+    }
+    args.push(function (err, value) {
+      if (err) {
+        promiseReject(err);
+      } else {
+        promiseResolve(value);
+      }
+    });
+
+    try {
+      original.apply(this, args);
+    } catch (err) {
+      promiseReject(err);
+    }
+
+    return promise;
+  }
+
+  Object.setPrototypeOf(fn, Object.getPrototypeOf(original));
+
+  if (kCustomPromisifiedSymbol) Object.defineProperty(fn, kCustomPromisifiedSymbol, {
+    value: fn, enumerable: false, writable: false, configurable: true
+  });
+  return Object.defineProperties(
+    fn,
+    getOwnPropertyDescriptors(original)
+  );
+}
+
+exports.promisify.custom = kCustomPromisifiedSymbol
+
+function callbackifyOnRejected(reason, cb) {
+  // `!reason` guard inspired by bluebird (Ref: https://goo.gl/t5IS6M).
+  // Because `null` is a special error value in callbacks which means "no error
+  // occurred", we error-wrap so the callback consumer can distinguish between
+  // "the promise rejected with null" or "the promise fulfilled with undefined".
+  if (!reason) {
+    var newReason = new Error('Promise was rejected with a falsy value');
+    newReason.reason = reason;
+    reason = newReason;
+  }
+  return cb(reason);
+}
+
+function callbackify(original) {
+  if (typeof original !== 'function') {
+    throw new TypeError('The "original" argument must be of type Function');
+  }
+
+  // We DO NOT return the promise as it gives the user a false sense that
+  // the promise is actually somehow related to the callback's execution
+  // and that the callback throwing will reject the promise.
+  function callbackified() {
+    var args = [];
+    for (var i = 0; i < arguments.length; i++) {
+      args.push(arguments[i]);
+    }
+
+    var maybeCb = args.pop();
+    if (typeof maybeCb !== 'function') {
+      throw new TypeError('The last argument must be of type Function');
+    }
+    var self = this;
+    var cb = function() {
+      return maybeCb.apply(self, arguments);
+    };
+    // In true node style we process the callback on `nextTick` with all the
+    // implications (stack, `uncaughtException`, `async_hooks`)
+    original.apply(this, args)
+      .then(function(ret) { process.nextTick(cb, null, ret) },
+            function(rej) { process.nextTick(callbackifyOnRejected, rej, cb) });
+  }
+
+  Object.setPrototypeOf(callbackified, Object.getPrototypeOf(original));
+  Object.defineProperties(callbackified,
+                          getOwnPropertyDescriptors(original));
+  return callbackified;
+}
+exports.callbackify = callbackify;
+
+/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../../../process/browser.js */ "./node_modules/process/browser.js")))
+
+/***/ }),
+
 /***/ "./node_modules/nrrd-js/nrrd.js":
 /*!**************************************!*\
   !*** ./node_modules/nrrd-js/nrrd.js ***!
@@ -13313,6 +14206,108 @@ function serializeToTextBuffer(data) {
     }
     return buffer;
 }
+
+
+/***/ }),
+
+/***/ "./node_modules/object-assign/index.js":
+/*!*********************************************!*\
+  !*** ./node_modules/object-assign/index.js ***!
+  \*********************************************/
+/*! no static exports found */
+/***/ (function(module, exports, __webpack_require__) {
+
+"use strict";
+/*
+object-assign
+(c) Sindre Sorhus
+@license MIT
+*/
+
+
+/* eslint-disable no-unused-vars */
+var getOwnPropertySymbols = Object.getOwnPropertySymbols;
+var hasOwnProperty = Object.prototype.hasOwnProperty;
+var propIsEnumerable = Object.prototype.propertyIsEnumerable;
+
+function toObject(val) {
+	if (val === null || val === undefined) {
+		throw new TypeError('Object.assign cannot be called with null or undefined');
+	}
+
+	return Object(val);
+}
+
+function shouldUseNative() {
+	try {
+		if (!Object.assign) {
+			return false;
+		}
+
+		// Detect buggy property enumeration order in older V8 versions.
+
+		// https://bugs.chromium.org/p/v8/issues/detail?id=4118
+		var test1 = new String('abc');  // eslint-disable-line no-new-wrappers
+		test1[5] = 'de';
+		if (Object.getOwnPropertyNames(test1)[0] === '5') {
+			return false;
+		}
+
+		// https://bugs.chromium.org/p/v8/issues/detail?id=3056
+		var test2 = {};
+		for (var i = 0; i < 10; i++) {
+			test2['_' + String.fromCharCode(i)] = i;
+		}
+		var order2 = Object.getOwnPropertyNames(test2).map(function (n) {
+			return test2[n];
+		});
+		if (order2.join('') !== '0123456789') {
+			return false;
+		}
+
+		// https://bugs.chromium.org/p/v8/issues/detail?id=3056
+		var test3 = {};
+		'abcdefghijklmnopqrst'.split('').forEach(function (letter) {
+			test3[letter] = letter;
+		});
+		if (Object.keys(Object.assign({}, test3)).join('') !==
+				'abcdefghijklmnopqrst') {
+			return false;
+		}
+
+		return true;
+	} catch (err) {
+		// We don't expect any of the above to throw, but better to be safe.
+		return false;
+	}
+}
+
+module.exports = shouldUseNative() ? Object.assign : function (target, source) {
+	var from;
+	var to = toObject(target);
+	var symbols;
+
+	for (var s = 1; s < arguments.length; s++) {
+		from = Object(arguments[s]);
+
+		for (var key in from) {
+			if (hasOwnProperty.call(from, key)) {
+				to[key] = from[key];
+			}
+		}
+
+		if (getOwnPropertySymbols) {
+			symbols = getOwnPropertySymbols(from);
+			for (var i = 0; i < symbols.length; i++) {
+				if (propIsEnumerable.call(from, symbols[i])) {
+					to[symbols[i]] = from[symbols[i]];
+				}
+			}
+		}
+	}
+
+	return to;
+};
 
 
 /***/ }),
@@ -20081,7 +21076,10 @@ module.exports = ZStream;
 /*! no static exports found */
 /***/ (function(module, exports, __webpack_require__) {
 
-/* WEBPACK VAR INJECTION */(function(process) {// Copyright Joyent, Inc. and other Node contributors.
+/* WEBPACK VAR INJECTION */(function(process) {// .dirname, .basename, and .extname methods are extracted from Node.js v8.11.1,
+// backported and transplited with Babel, with backwards-compat fixes
+
+// Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the
@@ -20131,14 +21129,6 @@ function normalizeArray(parts, allowAboveRoot) {
 
   return parts;
 }
-
-// Split a filename into [root, dir, basename, ext], unix version
-// 'root' is just a slash, or nothing.
-var splitPathRe =
-    /^(\/?|)([\s\S]*?)((?:\.{1,2}|[^\/]+?|)(\.[^.\/]*|))(?:[\/]*)$/;
-var splitPath = function(filename) {
-  return splitPathRe.exec(filename).slice(1);
-};
 
 // path.resolve([from ...], to)
 // posix version
@@ -20255,37 +21245,120 @@ exports.relative = function(from, to) {
 exports.sep = '/';
 exports.delimiter = ':';
 
-exports.dirname = function(path) {
-  var result = splitPath(path),
-      root = result[0],
-      dir = result[1];
-
-  if (!root && !dir) {
-    // No dirname whatsoever
-    return '.';
+exports.dirname = function (path) {
+  if (typeof path !== 'string') path = path + '';
+  if (path.length === 0) return '.';
+  var code = path.charCodeAt(0);
+  var hasRoot = code === 47 /*/*/;
+  var end = -1;
+  var matchedSlash = true;
+  for (var i = path.length - 1; i >= 1; --i) {
+    code = path.charCodeAt(i);
+    if (code === 47 /*/*/) {
+        if (!matchedSlash) {
+          end = i;
+          break;
+        }
+      } else {
+      // We saw the first non-path separator
+      matchedSlash = false;
+    }
   }
 
-  if (dir) {
-    // It has a dirname, strip trailing slash
-    dir = dir.substr(0, dir.length - 1);
+  if (end === -1) return hasRoot ? '/' : '.';
+  if (hasRoot && end === 1) {
+    // return '//';
+    // Backwards-compat fix:
+    return '/';
   }
-
-  return root + dir;
+  return path.slice(0, end);
 };
 
+function basename(path) {
+  if (typeof path !== 'string') path = path + '';
 
-exports.basename = function(path, ext) {
-  var f = splitPath(path)[2];
-  // TODO: make this comparison case-insensitive on windows?
+  var start = 0;
+  var end = -1;
+  var matchedSlash = true;
+  var i;
+
+  for (i = path.length - 1; i >= 0; --i) {
+    if (path.charCodeAt(i) === 47 /*/*/) {
+        // If we reached a path separator that was not part of a set of path
+        // separators at the end of the string, stop now
+        if (!matchedSlash) {
+          start = i + 1;
+          break;
+        }
+      } else if (end === -1) {
+      // We saw the first non-path separator, mark this as the end of our
+      // path component
+      matchedSlash = false;
+      end = i + 1;
+    }
+  }
+
+  if (end === -1) return '';
+  return path.slice(start, end);
+}
+
+// Uses a mixed approach for backwards-compatibility, as ext behavior changed
+// in new Node.js versions, so only basename() above is backported here
+exports.basename = function (path, ext) {
+  var f = basename(path);
   if (ext && f.substr(-1 * ext.length) === ext) {
     f = f.substr(0, f.length - ext.length);
   }
   return f;
 };
 
+exports.extname = function (path) {
+  if (typeof path !== 'string') path = path + '';
+  var startDot = -1;
+  var startPart = 0;
+  var end = -1;
+  var matchedSlash = true;
+  // Track the state of characters (if any) we see before our first dot and
+  // after any path separator we find
+  var preDotState = 0;
+  for (var i = path.length - 1; i >= 0; --i) {
+    var code = path.charCodeAt(i);
+    if (code === 47 /*/*/) {
+        // If we reached a path separator that was not part of a set of path
+        // separators at the end of the string, stop now
+        if (!matchedSlash) {
+          startPart = i + 1;
+          break;
+        }
+        continue;
+      }
+    if (end === -1) {
+      // We saw the first non-path separator, mark this as the end of our
+      // extension
+      matchedSlash = false;
+      end = i + 1;
+    }
+    if (code === 46 /*.*/) {
+        // If this is our first dot, mark it as the start of our extension
+        if (startDot === -1)
+          startDot = i;
+        else if (preDotState !== 1)
+          preDotState = 1;
+    } else if (startDot !== -1) {
+      // We saw a non-dot and non-path separator before our dot, so we should
+      // have a good chance at having a non-empty extension
+      preDotState = -1;
+    }
+  }
 
-exports.extname = function(path) {
-  return splitPath(path)[3];
+  if (startDot === -1 || end === -1 ||
+      // We saw a non-dot character immediately before the dot
+      preDotState === 0 ||
+      // The (right-most) trimmed path component is exactly '..'
+      preDotState === 1 && startDot === end - 1 && startDot === startPart + 1) {
+    return '';
+  }
+  return path.slice(startDot, end);
 };
 
 function filter (xs, f) {
@@ -20509,10 +21582,10 @@ process.umask = function() { return 0; };
 /*!*****************************************!*\
   !*** ./node_modules/three/package.json ***!
   \*****************************************/
-/*! exports provided: name, version, description, main, repository, jsnext:main, module, files, directories, eslintConfig, scripts, keywords, author, license, bugs, homepage, devDependencies, jspm, default */
+/*! exports provided: _from, _id, _inBundle, _integrity, _location, _phantomChildren, _requested, _requiredBy, _resolved, _shasum, _spec, _where, author, bugs, bundleDependencies, deprecated, description, devDependencies, directories, eslintConfig, files, homepage, jspm, keywords, license, main, module, name, repository, scripts, types, version, default */
 /***/ (function(module) {
 
-module.exports = {"name":"three","version":"0.99.0","description":"JavaScript 3D library","main":"build/three.js","repository":"mrdoob/three.js","jsnext:main":"build/three.module.js","module":"build/three.module.js","files":["package.json","LICENSE","README.md","build/three.js","build/three.min.js","build/three.module.js","src","examples/js","examples/fonts"],"directories":{"doc":"docs","example":"examples","test":"test"},"eslintConfig":{"extends":"mdcs","plugins":["html"]},"scripts":{"build":"rollup -c","build-test":"rollup -c test/rollup.unit.config.js","build-closure":"rollup -c && java -jar node_modules/google-closure-compiler-java/compiler.jar --warning_level=VERBOSE --jscomp_off=globalThis --jscomp_off=checkTypes --externs utils/build/externs.js --language_in=ECMASCRIPT5_STRICT --js build/three.js --js_output_file build/three.min.js","dev":"concurrently --names \"ROLLUP,HTTP\" -c \"bgBlue.bold,bgGreen.bold\" \"rollup -c -w -m inline\" \"http-server -c-1 -p 8080\"","dev-test":"concurrently --names \"ROLLUP,ROLLUPTEST,HTTP\" -c \"bgBlue.bold,bgRed.bold,bgGreen.bold\" \"rollup -c -w -m inline\" \"rollup -c test/rollup.unit.config.js -w -m inline\" \"http-server -p 8080\"","start":"npm run dev","lint":"eslint src","test":"npm run build-test && qunit test/unit/three.source.unit.js","travis":"npm run lint && npm test","editor":"electron ./editor/main.js"},"keywords":["three","three.js","3d","webgl"],"author":"mrdoob","license":"MIT","bugs":{"url":"https://github.com/mrdoob/three.js/issues"},"homepage":"https://threejs.org/","devDependencies":{"concurrently":"^4.0.1","electron":"^3.0.8","eslint":"^5.9.0","eslint-config-mdcs":"^4.2.3","eslint-plugin-html":"^5.0.0","google-closure-compiler":"20181028.0.1","http-server":"^0.11.1","qunit":"^2.8.0","rollup":"^0.67.1"},"jspm":{"files":["package.json","LICENSE","README.md","build/three.js","build/three.min.js","build/three.module.js"],"directories":{}}};
+module.exports = JSON.parse("{\"_from\":\"three@latest\",\"_id\":\"three@0.115.0\",\"_inBundle\":false,\"_integrity\":\"sha512-mAV2Ky3RdcbdSbR9capI+tKLvRldWYxd4151PZTT/o7+U2jh9Is3a4KmnYwzyUAhB2ZA3pXSgCd2DOY4Tj5kow==\",\"_location\":\"/three\",\"_phantomChildren\":{},\"_requested\":{\"type\":\"tag\",\"registry\":true,\"raw\":\"three@latest\",\"name\":\"three\",\"escapedName\":\"three\",\"rawSpec\":\"latest\",\"saveSpec\":null,\"fetchSpec\":\"latest\"},\"_requiredBy\":[\"/\"],\"_resolved\":\"https://registry.npmjs.org/three/-/three-0.115.0.tgz\",\"_shasum\":\"540d800c381b9da2334c024f0fbe4d23f84eb05e\",\"_spec\":\"three@latest\",\"_where\":\"/c/Users/Chris/Desktop/Development/ami\",\"author\":{\"name\":\"mrdoob\"},\"bugs\":{\"url\":\"https://github.com/mrdoob/three.js/issues\"},\"bundleDependencies\":false,\"deprecated\":false,\"description\":\"JavaScript 3D library\",\"devDependencies\":{\"@typescript-eslint/eslint-plugin\":\"^2.23.0\",\"@typescript-eslint/parser\":\"^2.23.0\",\"concurrently\":\"^5.0.2\",\"cross-env\":\"^7.0.0\",\"eslint\":\"^6.8.0\",\"eslint-config-mdcs\":\"^4.2.3\",\"eslint-plugin-html\":\"^6.0.0\",\"failonlyreporter\":\"^1.0.0\",\"google-closure-compiler\":\"20200224.0.0\",\"http-server\":\"^0.12.1\",\"image-output\":\"2.4.1\",\"pixelmatch\":\"5.1.0\",\"pngjs\":\"3.4.0\",\"puppeteer\":\"^2.1.1\",\"qunit\":\"^2.9.3\",\"rollup\":\"^2.0.5\",\"rollup-plugin-buble\":\"^0.19.8\",\"serve-handler\":\"^6.1.2\",\"typescript\":\"^3.8.3\"},\"directories\":{\"doc\":\"docs\",\"example\":\"examples\",\"test\":\"test\"},\"eslintConfig\":{\"parser\":\"@typescript-eslint/parser\",\"extends\":\"mdcs\",\"plugins\":[\"html\",\"@typescript-eslint\"],\"rules\":{\"@typescript-eslint/no-unused-vars\":1,\"@typescript-eslint/indent\":[\"error\",\"tab\",{\"SwitchCase\":1}]}},\"files\":[\"build/three.js\",\"build/three.min.js\",\"build/three.module.js\",\"examples/js\",\"examples/jsm\",\"examples/fonts\",\"LICENSE\",\"package.json\",\"README.md\",\"src\"],\"homepage\":\"https://threejs.org/\",\"jspm\":{\"files\":[\"package.json\",\"LICENSE\",\"README.md\",\"build/three.js\",\"build/three.min.js\",\"build/three.module.js\"],\"directories\":{}},\"keywords\":[\"three\",\"three.js\",\"3d\",\"canvas\",\"svg\",\"webgl\"],\"license\":\"MIT\",\"main\":\"build/three.js\",\"module\":\"build/three.module.js\",\"name\":\"three\",\"repository\":{\"type\":\"git\",\"url\":\"git+https://github.com/mrdoob/three.js.git\"},\"scripts\":{\"build\":\"rollup -c utils/build/rollup.config.js\",\"build-closure\":\"rollup -c utils/build/rollup.config.js && google-closure-compiler --warning_level=VERBOSE --jscomp_off=globalThis --jscomp_off=checkTypes --externs utils/build/externs.js --language_in=ECMASCRIPT5_STRICT --js build/three.js --js_output_file build/three.min.js\",\"build-examples\":\"rollup -c utils/build/rollup-examples.config.js\",\"build-test\":\"rollup -c test/rollup.unit.config.js\",\"dev\":\"concurrently --names \\\"ROLLUP,HTTP\\\" -c \\\"bgBlue.bold,bgGreen.bold\\\" \\\"rollup -c utils/build/rollup.config.js -w -m inline\\\" \\\"http-server -c-1 -p 8080\\\"\",\"dev-test\":\"concurrently --names \\\"ROLLUP,ROLLUPTEST,HTTP\\\" -c \\\"bgBlue.bold,bgRed.bold,bgGreen.bold\\\" \\\"rollup -c utils/build/rollup.config.js -w -m inline\\\" \\\"rollup -c test/rollup.unit.config.js -w -m inline\\\" \\\"http-server -p 8080\\\"\",\"make-screenshot\":\"cross-env MAKE=true npm run test-e2e\",\"start\":\"npm run dev\",\"test\":\"npm run test-lint && npm run test-unit\",\"test-e2e\":\"node --expose-gc test/e2e/puppeteer.js\",\"test-lint\":\"eslint src --ext js --ext ts && tsc -p utils/build/tsconfig.lint.json\",\"test-lint-examples\":\"eslint examples/jsm --ext js --ext ts --ignore-pattern libs && tsc -p utils/build/tsconfig-examples.lint.json\",\"test-unit\":\"npm run build-test && qunit -r failonlyreporter test/unit/three.source.unit.js\"},\"types\":\"src/Three.d.ts\",\"version\":\"0.115.0\"}");
 
 /***/ }),
 
@@ -20520,13 +21593,14 @@ module.exports = {"name":"three","version":"0.99.0","description":"JavaScript 3D
 /*!*********************************************!*\
   !*** ./node_modules/three/src/constants.js ***!
   \*********************************************/
-/*! exports provided: REVISION, MOUSE, CullFaceNone, CullFaceBack, CullFaceFront, CullFaceFrontBack, FrontFaceDirectionCW, FrontFaceDirectionCCW, BasicShadowMap, PCFShadowMap, PCFSoftShadowMap, FrontSide, BackSide, DoubleSide, FlatShading, SmoothShading, NoColors, FaceColors, VertexColors, NoBlending, NormalBlending, AdditiveBlending, SubtractiveBlending, MultiplyBlending, CustomBlending, AddEquation, SubtractEquation, ReverseSubtractEquation, MinEquation, MaxEquation, ZeroFactor, OneFactor, SrcColorFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DstAlphaFactor, OneMinusDstAlphaFactor, DstColorFactor, OneMinusDstColorFactor, SrcAlphaSaturateFactor, NeverDepth, AlwaysDepth, LessDepth, LessEqualDepth, EqualDepth, GreaterEqualDepth, GreaterDepth, NotEqualDepth, MultiplyOperation, MixOperation, AddOperation, NoToneMapping, LinearToneMapping, ReinhardToneMapping, Uncharted2ToneMapping, CineonToneMapping, ACESFilmicToneMapping, UVMapping, CubeReflectionMapping, CubeRefractionMapping, EquirectangularReflectionMapping, EquirectangularRefractionMapping, SphericalReflectionMapping, CubeUVReflectionMapping, CubeUVRefractionMapping, RepeatWrapping, ClampToEdgeWrapping, MirroredRepeatWrapping, NearestFilter, NearestMipMapNearestFilter, NearestMipMapLinearFilter, LinearFilter, LinearMipMapNearestFilter, LinearMipMapLinearFilter, UnsignedByteType, ByteType, ShortType, UnsignedShortType, IntType, UnsignedIntType, FloatType, HalfFloatType, UnsignedShort4444Type, UnsignedShort5551Type, UnsignedShort565Type, UnsignedInt248Type, AlphaFormat, RGBFormat, RGBAFormat, LuminanceFormat, LuminanceAlphaFormat, RGBEFormat, DepthFormat, DepthStencilFormat, RedFormat, RGB_S3TC_DXT1_Format, RGBA_S3TC_DXT1_Format, RGBA_S3TC_DXT3_Format, RGBA_S3TC_DXT5_Format, RGB_PVRTC_4BPPV1_Format, RGB_PVRTC_2BPPV1_Format, RGBA_PVRTC_4BPPV1_Format, RGBA_PVRTC_2BPPV1_Format, RGB_ETC1_Format, RGBA_ASTC_4x4_Format, RGBA_ASTC_5x4_Format, RGBA_ASTC_5x5_Format, RGBA_ASTC_6x5_Format, RGBA_ASTC_6x6_Format, RGBA_ASTC_8x5_Format, RGBA_ASTC_8x6_Format, RGBA_ASTC_8x8_Format, RGBA_ASTC_10x5_Format, RGBA_ASTC_10x6_Format, RGBA_ASTC_10x8_Format, RGBA_ASTC_10x10_Format, RGBA_ASTC_12x10_Format, RGBA_ASTC_12x12_Format, LoopOnce, LoopRepeat, LoopPingPong, InterpolateDiscrete, InterpolateLinear, InterpolateSmooth, ZeroCurvatureEnding, ZeroSlopeEnding, WrapAroundEnding, TrianglesDrawMode, TriangleStripDrawMode, TriangleFanDrawMode, LinearEncoding, sRGBEncoding, GammaEncoding, RGBEEncoding, LogLuvEncoding, RGBM7Encoding, RGBM16Encoding, RGBDEncoding, BasicDepthPacking, RGBADepthPacking, TangentSpaceNormalMap, ObjectSpaceNormalMap */
+/*! exports provided: REVISION, MOUSE, TOUCH, CullFaceNone, CullFaceBack, CullFaceFront, CullFaceFrontBack, FrontFaceDirectionCW, FrontFaceDirectionCCW, BasicShadowMap, PCFShadowMap, PCFSoftShadowMap, VSMShadowMap, FrontSide, BackSide, DoubleSide, FlatShading, SmoothShading, NoBlending, NormalBlending, AdditiveBlending, SubtractiveBlending, MultiplyBlending, CustomBlending, AddEquation, SubtractEquation, ReverseSubtractEquation, MinEquation, MaxEquation, ZeroFactor, OneFactor, SrcColorFactor, OneMinusSrcColorFactor, SrcAlphaFactor, OneMinusSrcAlphaFactor, DstAlphaFactor, OneMinusDstAlphaFactor, DstColorFactor, OneMinusDstColorFactor, SrcAlphaSaturateFactor, NeverDepth, AlwaysDepth, LessDepth, LessEqualDepth, EqualDepth, GreaterEqualDepth, GreaterDepth, NotEqualDepth, MultiplyOperation, MixOperation, AddOperation, NoToneMapping, LinearToneMapping, ReinhardToneMapping, Uncharted2ToneMapping, CineonToneMapping, ACESFilmicToneMapping, UVMapping, CubeReflectionMapping, CubeRefractionMapping, EquirectangularReflectionMapping, EquirectangularRefractionMapping, SphericalReflectionMapping, CubeUVReflectionMapping, CubeUVRefractionMapping, RepeatWrapping, ClampToEdgeWrapping, MirroredRepeatWrapping, NearestFilter, NearestMipmapNearestFilter, NearestMipMapNearestFilter, NearestMipmapLinearFilter, NearestMipMapLinearFilter, LinearFilter, LinearMipmapNearestFilter, LinearMipMapNearestFilter, LinearMipmapLinearFilter, LinearMipMapLinearFilter, UnsignedByteType, ByteType, ShortType, UnsignedShortType, IntType, UnsignedIntType, FloatType, HalfFloatType, UnsignedShort4444Type, UnsignedShort5551Type, UnsignedShort565Type, UnsignedInt248Type, AlphaFormat, RGBFormat, RGBAFormat, LuminanceFormat, LuminanceAlphaFormat, RGBEFormat, DepthFormat, DepthStencilFormat, RedFormat, RedIntegerFormat, RGFormat, RGIntegerFormat, RGBIntegerFormat, RGBAIntegerFormat, RGB_S3TC_DXT1_Format, RGBA_S3TC_DXT1_Format, RGBA_S3TC_DXT3_Format, RGBA_S3TC_DXT5_Format, RGB_PVRTC_4BPPV1_Format, RGB_PVRTC_2BPPV1_Format, RGBA_PVRTC_4BPPV1_Format, RGBA_PVRTC_2BPPV1_Format, RGB_ETC1_Format, RGB_ETC2_Format, RGBA_ETC2_EAC_Format, RGBA_ASTC_4x4_Format, RGBA_ASTC_5x4_Format, RGBA_ASTC_5x5_Format, RGBA_ASTC_6x5_Format, RGBA_ASTC_6x6_Format, RGBA_ASTC_8x5_Format, RGBA_ASTC_8x6_Format, RGBA_ASTC_8x8_Format, RGBA_ASTC_10x5_Format, RGBA_ASTC_10x6_Format, RGBA_ASTC_10x8_Format, RGBA_ASTC_10x10_Format, RGBA_ASTC_12x10_Format, RGBA_ASTC_12x12_Format, RGBA_BPTC_Format, SRGB8_ALPHA8_ASTC_4x4_Format, SRGB8_ALPHA8_ASTC_5x4_Format, SRGB8_ALPHA8_ASTC_5x5_Format, SRGB8_ALPHA8_ASTC_6x5_Format, SRGB8_ALPHA8_ASTC_6x6_Format, SRGB8_ALPHA8_ASTC_8x5_Format, SRGB8_ALPHA8_ASTC_8x6_Format, SRGB8_ALPHA8_ASTC_8x8_Format, SRGB8_ALPHA8_ASTC_10x5_Format, SRGB8_ALPHA8_ASTC_10x6_Format, SRGB8_ALPHA8_ASTC_10x8_Format, SRGB8_ALPHA8_ASTC_10x10_Format, SRGB8_ALPHA8_ASTC_12x10_Format, SRGB8_ALPHA8_ASTC_12x12_Format, LoopOnce, LoopRepeat, LoopPingPong, InterpolateDiscrete, InterpolateLinear, InterpolateSmooth, ZeroCurvatureEnding, ZeroSlopeEnding, WrapAroundEnding, TrianglesDrawMode, TriangleStripDrawMode, TriangleFanDrawMode, LinearEncoding, sRGBEncoding, GammaEncoding, RGBEEncoding, LogLuvEncoding, RGBM7Encoding, RGBM16Encoding, RGBDEncoding, BasicDepthPacking, RGBADepthPacking, TangentSpaceNormalMap, ObjectSpaceNormalMap, ZeroStencilOp, KeepStencilOp, ReplaceStencilOp, IncrementStencilOp, DecrementStencilOp, IncrementWrapStencilOp, DecrementWrapStencilOp, InvertStencilOp, NeverStencilFunc, LessStencilFunc, EqualStencilFunc, LessEqualStencilFunc, GreaterStencilFunc, NotEqualStencilFunc, GreaterEqualStencilFunc, AlwaysStencilFunc, StaticDrawUsage, DynamicDrawUsage, StreamDrawUsage, StaticReadUsage, DynamicReadUsage, StreamReadUsage, StaticCopyUsage, DynamicCopyUsage, StreamCopyUsage */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "REVISION", function() { return REVISION; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "MOUSE", function() { return MOUSE; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "TOUCH", function() { return TOUCH; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "CullFaceNone", function() { return CullFaceNone; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "CullFaceBack", function() { return CullFaceBack; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "CullFaceFront", function() { return CullFaceFront; });
@@ -20536,14 +21610,12 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "BasicShadowMap", function() { return BasicShadowMap; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "PCFShadowMap", function() { return PCFShadowMap; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "PCFSoftShadowMap", function() { return PCFSoftShadowMap; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "VSMShadowMap", function() { return VSMShadowMap; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "FrontSide", function() { return FrontSide; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "BackSide", function() { return BackSide; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "DoubleSide", function() { return DoubleSide; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "FlatShading", function() { return FlatShading; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SmoothShading", function() { return SmoothShading; });
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "NoColors", function() { return NoColors; });
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "FaceColors", function() { return FaceColors; });
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "VertexColors", function() { return VertexColors; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "NoBlending", function() { return NoBlending; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "NormalBlending", function() { return NormalBlending; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "AdditiveBlending", function() { return AdditiveBlending; });
@@ -20595,10 +21667,14 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ClampToEdgeWrapping", function() { return ClampToEdgeWrapping; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "MirroredRepeatWrapping", function() { return MirroredRepeatWrapping; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "NearestFilter", function() { return NearestFilter; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "NearestMipmapNearestFilter", function() { return NearestMipmapNearestFilter; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "NearestMipMapNearestFilter", function() { return NearestMipMapNearestFilter; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "NearestMipmapLinearFilter", function() { return NearestMipmapLinearFilter; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "NearestMipMapLinearFilter", function() { return NearestMipMapLinearFilter; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "LinearFilter", function() { return LinearFilter; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "LinearMipmapNearestFilter", function() { return LinearMipmapNearestFilter; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "LinearMipMapNearestFilter", function() { return LinearMipMapNearestFilter; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "LinearMipmapLinearFilter", function() { return LinearMipmapLinearFilter; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "LinearMipMapLinearFilter", function() { return LinearMipMapLinearFilter; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "UnsignedByteType", function() { return UnsignedByteType; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ByteType", function() { return ByteType; });
@@ -20621,6 +21697,11 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "DepthFormat", function() { return DepthFormat; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "DepthStencilFormat", function() { return DepthStencilFormat; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RedFormat", function() { return RedFormat; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RedIntegerFormat", function() { return RedIntegerFormat; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGFormat", function() { return RGFormat; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGIntegerFormat", function() { return RGIntegerFormat; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBIntegerFormat", function() { return RGBIntegerFormat; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBAIntegerFormat", function() { return RGBAIntegerFormat; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGB_S3TC_DXT1_Format", function() { return RGB_S3TC_DXT1_Format; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBA_S3TC_DXT1_Format", function() { return RGBA_S3TC_DXT1_Format; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBA_S3TC_DXT3_Format", function() { return RGBA_S3TC_DXT3_Format; });
@@ -20630,6 +21711,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBA_PVRTC_4BPPV1_Format", function() { return RGBA_PVRTC_4BPPV1_Format; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBA_PVRTC_2BPPV1_Format", function() { return RGBA_PVRTC_2BPPV1_Format; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGB_ETC1_Format", function() { return RGB_ETC1_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGB_ETC2_Format", function() { return RGB_ETC2_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBA_ETC2_EAC_Format", function() { return RGBA_ETC2_EAC_Format; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBA_ASTC_4x4_Format", function() { return RGBA_ASTC_4x4_Format; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBA_ASTC_5x4_Format", function() { return RGBA_ASTC_5x4_Format; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBA_ASTC_5x5_Format", function() { return RGBA_ASTC_5x5_Format; });
@@ -20644,6 +21727,21 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBA_ASTC_10x10_Format", function() { return RGBA_ASTC_10x10_Format; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBA_ASTC_12x10_Format", function() { return RGBA_ASTC_12x10_Format; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBA_ASTC_12x12_Format", function() { return RGBA_ASTC_12x12_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBA_BPTC_Format", function() { return RGBA_BPTC_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SRGB8_ALPHA8_ASTC_4x4_Format", function() { return SRGB8_ALPHA8_ASTC_4x4_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SRGB8_ALPHA8_ASTC_5x4_Format", function() { return SRGB8_ALPHA8_ASTC_5x4_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SRGB8_ALPHA8_ASTC_5x5_Format", function() { return SRGB8_ALPHA8_ASTC_5x5_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SRGB8_ALPHA8_ASTC_6x5_Format", function() { return SRGB8_ALPHA8_ASTC_6x5_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SRGB8_ALPHA8_ASTC_6x6_Format", function() { return SRGB8_ALPHA8_ASTC_6x6_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SRGB8_ALPHA8_ASTC_8x5_Format", function() { return SRGB8_ALPHA8_ASTC_8x5_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SRGB8_ALPHA8_ASTC_8x6_Format", function() { return SRGB8_ALPHA8_ASTC_8x6_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SRGB8_ALPHA8_ASTC_8x8_Format", function() { return SRGB8_ALPHA8_ASTC_8x8_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SRGB8_ALPHA8_ASTC_10x5_Format", function() { return SRGB8_ALPHA8_ASTC_10x5_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SRGB8_ALPHA8_ASTC_10x6_Format", function() { return SRGB8_ALPHA8_ASTC_10x6_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SRGB8_ALPHA8_ASTC_10x8_Format", function() { return SRGB8_ALPHA8_ASTC_10x8_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SRGB8_ALPHA8_ASTC_10x10_Format", function() { return SRGB8_ALPHA8_ASTC_10x10_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SRGB8_ALPHA8_ASTC_12x10_Format", function() { return SRGB8_ALPHA8_ASTC_12x10_Format; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "SRGB8_ALPHA8_ASTC_12x12_Format", function() { return SRGB8_ALPHA8_ASTC_12x12_Format; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "LoopOnce", function() { return LoopOnce; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "LoopRepeat", function() { return LoopRepeat; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "LoopPingPong", function() { return LoopPingPong; });
@@ -20668,8 +21766,34 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "RGBADepthPacking", function() { return RGBADepthPacking; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "TangentSpaceNormalMap", function() { return TangentSpaceNormalMap; });
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ObjectSpaceNormalMap", function() { return ObjectSpaceNormalMap; });
-var REVISION = '99';
-var MOUSE = { LEFT: 0, MIDDLE: 1, RIGHT: 2 };
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ZeroStencilOp", function() { return ZeroStencilOp; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "KeepStencilOp", function() { return KeepStencilOp; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "ReplaceStencilOp", function() { return ReplaceStencilOp; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "IncrementStencilOp", function() { return IncrementStencilOp; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "DecrementStencilOp", function() { return DecrementStencilOp; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "IncrementWrapStencilOp", function() { return IncrementWrapStencilOp; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "DecrementWrapStencilOp", function() { return DecrementWrapStencilOp; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "InvertStencilOp", function() { return InvertStencilOp; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "NeverStencilFunc", function() { return NeverStencilFunc; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "LessStencilFunc", function() { return LessStencilFunc; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "EqualStencilFunc", function() { return EqualStencilFunc; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "LessEqualStencilFunc", function() { return LessEqualStencilFunc; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "GreaterStencilFunc", function() { return GreaterStencilFunc; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "NotEqualStencilFunc", function() { return NotEqualStencilFunc; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "GreaterEqualStencilFunc", function() { return GreaterEqualStencilFunc; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "AlwaysStencilFunc", function() { return AlwaysStencilFunc; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "StaticDrawUsage", function() { return StaticDrawUsage; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "DynamicDrawUsage", function() { return DynamicDrawUsage; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "StreamDrawUsage", function() { return StreamDrawUsage; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "StaticReadUsage", function() { return StaticReadUsage; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "DynamicReadUsage", function() { return DynamicReadUsage; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "StreamReadUsage", function() { return StreamReadUsage; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "StaticCopyUsage", function() { return StaticCopyUsage; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "DynamicCopyUsage", function() { return DynamicCopyUsage; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "StreamCopyUsage", function() { return StreamCopyUsage; });
+var REVISION = '115';
+var MOUSE = { LEFT: 0, MIDDLE: 1, RIGHT: 2, ROTATE: 0, DOLLY: 1, PAN: 2 };
+var TOUCH = { ROTATE: 0, PAN: 1, DOLLY_PAN: 2, DOLLY_ROTATE: 3 };
 var CullFaceNone = 0;
 var CullFaceBack = 1;
 var CullFaceFront = 2;
@@ -20679,14 +21803,12 @@ var FrontFaceDirectionCCW = 1;
 var BasicShadowMap = 0;
 var PCFShadowMap = 1;
 var PCFSoftShadowMap = 2;
+var VSMShadowMap = 3;
 var FrontSide = 0;
 var BackSide = 1;
 var DoubleSide = 2;
 var FlatShading = 1;
 var SmoothShading = 2;
-var NoColors = 0;
-var FaceColors = 1;
-var VertexColors = 2;
 var NoBlending = 0;
 var NormalBlending = 1;
 var AdditiveBlending = 2;
@@ -20739,10 +21861,14 @@ var RepeatWrapping = 1000;
 var ClampToEdgeWrapping = 1001;
 var MirroredRepeatWrapping = 1002;
 var NearestFilter = 1003;
+var NearestMipmapNearestFilter = 1004;
 var NearestMipMapNearestFilter = 1004;
+var NearestMipmapLinearFilter = 1005;
 var NearestMipMapLinearFilter = 1005;
 var LinearFilter = 1006;
+var LinearMipmapNearestFilter = 1007;
 var LinearMipMapNearestFilter = 1007;
+var LinearMipmapLinearFilter = 1008;
 var LinearMipMapLinearFilter = 1008;
 var UnsignedByteType = 1009;
 var ByteType = 1010;
@@ -20765,6 +21891,12 @@ var RGBEFormat = RGBAFormat;
 var DepthFormat = 1026;
 var DepthStencilFormat = 1027;
 var RedFormat = 1028;
+var RedIntegerFormat = 1029;
+var RGFormat = 1030;
+var RGIntegerFormat = 1031;
+var RGBIntegerFormat = 1032;
+var RGBAIntegerFormat = 1033;
+
 var RGB_S3TC_DXT1_Format = 33776;
 var RGBA_S3TC_DXT1_Format = 33777;
 var RGBA_S3TC_DXT3_Format = 33778;
@@ -20774,6 +21906,8 @@ var RGB_PVRTC_2BPPV1_Format = 35841;
 var RGBA_PVRTC_4BPPV1_Format = 35842;
 var RGBA_PVRTC_2BPPV1_Format = 35843;
 var RGB_ETC1_Format = 36196;
+var RGB_ETC2_Format = 37492;
+var RGBA_ETC2_EAC_Format = 37496;
 var RGBA_ASTC_4x4_Format = 37808;
 var RGBA_ASTC_5x4_Format = 37809;
 var RGBA_ASTC_5x5_Format = 37810;
@@ -20788,6 +21922,21 @@ var RGBA_ASTC_10x8_Format = 37818;
 var RGBA_ASTC_10x10_Format = 37819;
 var RGBA_ASTC_12x10_Format = 37820;
 var RGBA_ASTC_12x12_Format = 37821;
+var RGBA_BPTC_Format = 36492;
+var SRGB8_ALPHA8_ASTC_4x4_Format = 37840;
+var SRGB8_ALPHA8_ASTC_5x4_Format = 37841;
+var SRGB8_ALPHA8_ASTC_5x5_Format = 37842;
+var SRGB8_ALPHA8_ASTC_6x5_Format = 37843;
+var SRGB8_ALPHA8_ASTC_6x6_Format = 37844;
+var SRGB8_ALPHA8_ASTC_8x5_Format = 37845;
+var SRGB8_ALPHA8_ASTC_8x6_Format = 37846;
+var SRGB8_ALPHA8_ASTC_8x8_Format = 37847;
+var SRGB8_ALPHA8_ASTC_10x5_Format = 37848;
+var SRGB8_ALPHA8_ASTC_10x6_Format = 37849;
+var SRGB8_ALPHA8_ASTC_10x8_Format = 37850;
+var SRGB8_ALPHA8_ASTC_10x10_Format = 37851;
+var SRGB8_ALPHA8_ASTC_12x10_Format = 37852;
+var SRGB8_ALPHA8_ASTC_12x12_Format = 37853;
 var LoopOnce = 2200;
 var LoopRepeat = 2201;
 var LoopPingPong = 2202;
@@ -20813,6 +21962,106 @@ var RGBADepthPacking = 3201;
 var TangentSpaceNormalMap = 0;
 var ObjectSpaceNormalMap = 1;
 
+var ZeroStencilOp = 0;
+var KeepStencilOp = 7680;
+var ReplaceStencilOp = 7681;
+var IncrementStencilOp = 7682;
+var DecrementStencilOp = 7683;
+var IncrementWrapStencilOp = 34055;
+var DecrementWrapStencilOp = 34056;
+var InvertStencilOp = 5386;
+
+var NeverStencilFunc = 512;
+var LessStencilFunc = 513;
+var EqualStencilFunc = 514;
+var LessEqualStencilFunc = 515;
+var GreaterStencilFunc = 516;
+var NotEqualStencilFunc = 517;
+var GreaterEqualStencilFunc = 518;
+var AlwaysStencilFunc = 519;
+
+var StaticDrawUsage = 35044;
+var DynamicDrawUsage = 35048;
+var StreamDrawUsage = 35040;
+var StaticReadUsage = 35045;
+var DynamicReadUsage = 35049;
+var StreamReadUsage = 35041;
+var StaticCopyUsage = 35046;
+var DynamicCopyUsage = 35050;
+var StreamCopyUsage = 35042;
+
+
+/***/ }),
+
+/***/ "./node_modules/three/src/core/Layers.js":
+/*!***********************************************!*\
+  !*** ./node_modules/three/src/core/Layers.js ***!
+  \***********************************************/
+/*! exports provided: Layers */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Layers", function() { return Layers; });
+/**
+ * @author mrdoob / http://mrdoob.com/
+ */
+
+function Layers() {
+
+	this.mask = 1 | 0;
+
+}
+
+Object.assign( Layers.prototype, {
+
+	set: function ( channel ) {
+
+		this.mask = 1 << channel | 0;
+
+	},
+
+	enable: function ( channel ) {
+
+		this.mask |= 1 << channel | 0;
+
+	},
+
+	enableAll: function () {
+
+		this.mask = 0xffffffff | 0;
+
+	},
+
+	toggle: function ( channel ) {
+
+		this.mask ^= 1 << channel | 0;
+
+	},
+
+	disable: function ( channel ) {
+
+		this.mask &= ~ ( 1 << channel | 0 );
+
+	},
+
+	disableAll: function () {
+
+		this.mask = 0;
+
+	},
+
+	test: function ( layers ) {
+
+		return ( this.mask & layers.mask ) !== 0;
+
+	}
+
+} );
+
+
+
+
 
 /***/ }),
 
@@ -20827,6 +22076,8 @@ var ObjectSpaceNormalMap = 1;
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Raycaster", function() { return Raycaster; });
 /* harmony import */ var _math_Ray_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../math/Ray.js */ "./node_modules/three/src/math/Ray.js");
+/* harmony import */ var _Layers_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./Layers.js */ "./node_modules/three/src/core/Layers.js");
+
 
 
 /**
@@ -20842,10 +22093,12 @@ function Raycaster( origin, direction, near, far ) {
 
 	this.near = near || 0;
 	this.far = far || Infinity;
+	this.camera = null;
+	this.layers = new _Layers_js__WEBPACK_IMPORTED_MODULE_1__["Layers"]();
 
 	this.params = {
 		Mesh: {},
-		Line: {},
+		Line: { threshold: 1 },
 		LOD: {},
 		Points: { threshold: 1 },
 		Sprite: {}
@@ -20872,9 +22125,11 @@ function ascSort( a, b ) {
 
 function intersectObject( object, raycaster, intersects, recursive ) {
 
-	if ( object.visible === false ) return;
+	if ( object.layers.test( raycaster.layers ) ) {
 
-	object.raycast( raycaster, intersects );
+		object.raycast( raycaster, intersects );
+
+	}
 
 	if ( recursive === true ) {
 
@@ -20892,8 +22147,6 @@ function intersectObject( object, raycaster, intersects, recursive ) {
 
 Object.assign( Raycaster.prototype, {
 
-	linePrecision: 1,
-
 	set: function ( origin, direction ) {
 
 		// direction is assumed to be normalized (for accurate distance calculations)
@@ -20908,11 +22161,13 @@ Object.assign( Raycaster.prototype, {
 
 			this.ray.origin.setFromMatrixPosition( camera.matrixWorld );
 			this.ray.direction.set( coords.x, coords.y, 0.5 ).unproject( camera ).sub( this.ray.origin ).normalize();
+			this.camera = camera;
 
 		} else if ( ( camera && camera.isOrthographicCamera ) ) {
 
 			this.ray.origin.set( coords.x, coords.y, ( camera.near + camera.far ) / ( camera.near - camera.far ) ).unproject( camera ); // set origin in plane of camera
 			this.ray.direction.set( 0, 0, - 1 ).transformDirection( camera.matrixWorld );
+			this.camera = camera;
 
 		} else {
 
@@ -20976,9 +22231,39 @@ Object.assign( Raycaster.prototype, {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Box3", function() { return Box3; });
 /* harmony import */ var _Vector3_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Vector3.js */ "./node_modules/three/src/math/Vector3.js");
-/* harmony import */ var _Sphere_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./Sphere.js */ "./node_modules/three/src/math/Sphere.js");
 
 
+var _points = [
+	new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"](),
+	new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"](),
+	new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"](),
+	new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"](),
+	new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"](),
+	new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"](),
+	new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"](),
+	new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]()
+];
+
+var _vector = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+
+var _box = new Box3();
+
+// triangle centered vertices
+
+var _v0 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _v2 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+
+// triangle edge vectors
+
+var _f0 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _f1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _f2 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+
+var _center = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _extents = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _triangleNormal = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _testAxis = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
 
 /**
  * @author bhouston / http://clara.io
@@ -20991,6 +22276,7 @@ function Box3( min, max ) {
 	this.max = ( max !== undefined ) ? max : new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]( - Infinity, - Infinity, - Infinity );
 
 }
+
 
 Object.assign( Box3.prototype, {
 
@@ -21085,22 +22371,16 @@ Object.assign( Box3.prototype, {
 
 	},
 
-	setFromCenterAndSize: function () {
+	setFromCenterAndSize: function ( center, size ) {
 
-		var v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		var halfSize = _vector.copy( size ).multiplyScalar( 0.5 );
 
-		return function setFromCenterAndSize( center, size ) {
+		this.min.copy( center ).sub( halfSize );
+		this.max.copy( center ).add( halfSize );
 
-			var halfSize = v1.copy( size ).multiplyScalar( 0.5 );
+		return this;
 
-			this.min.copy( center ).sub( halfSize );
-			this.max.copy( center ).add( halfSize );
-
-			return this;
-
-		};
-
-	}(),
+	},
 
 	setFromObject: function ( object ) {
 
@@ -21195,69 +22475,41 @@ Object.assign( Box3.prototype, {
 
 	},
 
-	expandByObject: function () {
+	expandByObject: function ( object ) {
 
 		// Computes the world-axis-aligned bounding box of an object (including its children),
 		// accounting for both the object's, and children's, world transforms
 
-		var scope, i, l;
+		object.updateWorldMatrix( false, false );
 
-		var v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		var geometry = object.geometry;
 
-		function traverse( node ) {
+		if ( geometry !== undefined ) {
 
-			var geometry = node.geometry;
+			if ( geometry.boundingBox === null ) {
 
-			if ( geometry !== undefined ) {
-
-				if ( geometry.isGeometry ) {
-
-					var vertices = geometry.vertices;
-
-					for ( i = 0, l = vertices.length; i < l; i ++ ) {
-
-						v1.copy( vertices[ i ] );
-						v1.applyMatrix4( node.matrixWorld );
-
-						scope.expandByPoint( v1 );
-
-					}
-
-				} else if ( geometry.isBufferGeometry ) {
-
-					var attribute = geometry.attributes.position;
-
-					if ( attribute !== undefined ) {
-
-						for ( i = 0, l = attribute.count; i < l; i ++ ) {
-
-							v1.fromBufferAttribute( attribute, i ).applyMatrix4( node.matrixWorld );
-
-							scope.expandByPoint( v1 );
-
-						}
-
-					}
-
-				}
+				geometry.computeBoundingBox();
 
 			}
 
+			_box.copy( geometry.boundingBox );
+			_box.applyMatrix4( object.matrixWorld );
+
+			this.union( _box );
+
 		}
 
-		return function expandByObject( object ) {
+		var children = object.children;
 
-			scope = this;
+		for ( var i = 0, l = children.length; i < l; i ++ ) {
 
-			object.updateMatrixWorld( true );
+			this.expandByObject( children[ i ] );
 
-			object.traverse( traverse );
+		}
 
-			return this;
+		return this;
 
-		};
-
-	}(),
+	},
 
 	containsPoint: function ( point ) {
 
@@ -21304,21 +22556,15 @@ Object.assign( Box3.prototype, {
 
 	},
 
-	intersectsSphere: ( function () {
+	intersectsSphere: function ( sphere ) {
 
-		var closestPoint = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		// Find the point on the AABB closest to the sphere center.
+		this.clampPoint( sphere.center, _vector );
 
-		return function intersectsSphere( sphere ) {
+		// If that point is inside the sphere, the AABB and sphere intersect.
+		return _vector.distanceToSquared( sphere.center ) <= ( sphere.radius * sphere.radius );
 
-			// Find the point on the AABB closest to the sphere center.
-			this.clampPoint( sphere.center, closestPoint );
-
-			// If that point is inside the sphere, the AABB and sphere intersect.
-			return closestPoint.distanceToSquared( sphere.center ) <= ( sphere.radius * sphere.radius );
-
-		};
-
-	} )(),
+	},
 
 	intersectsPlane: function ( plane ) {
 
@@ -21367,106 +22613,58 @@ Object.assign( Box3.prototype, {
 
 	},
 
-	intersectsTriangle: ( function () {
+	intersectsTriangle: function ( triangle ) {
 
-		// triangle centered vertices
-		var v0 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var v2 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		if ( this.isEmpty() ) {
 
-		// triangle edge vectors
-		var f0 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var f1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var f2 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-
-		var testAxis = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-
-		var center = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var extents = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-
-		var triangleNormal = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-
-		function satForAxes( axes ) {
-
-			var i, j;
-
-			for ( i = 0, j = axes.length - 3; i <= j; i += 3 ) {
-
-				testAxis.fromArray( axes, i );
-				// project the aabb onto the seperating axis
-				var r = extents.x * Math.abs( testAxis.x ) + extents.y * Math.abs( testAxis.y ) + extents.z * Math.abs( testAxis.z );
-				// project all 3 vertices of the triangle onto the seperating axis
-				var p0 = v0.dot( testAxis );
-				var p1 = v1.dot( testAxis );
-				var p2 = v2.dot( testAxis );
-				// actual test, basically see if either of the most extreme of the triangle points intersects r
-				if ( Math.max( - Math.max( p0, p1, p2 ), Math.min( p0, p1, p2 ) ) > r ) {
-
-					// points of the projected triangle are outside the projected half-length of the aabb
-					// the axis is seperating and we can exit
-					return false;
-
-				}
-
-			}
-
-			return true;
+			return false;
 
 		}
 
-		return function intersectsTriangle( triangle ) {
+		// compute box center and extents
+		this.getCenter( _center );
+		_extents.subVectors( this.max, _center );
 
-			if ( this.isEmpty() ) {
+		// translate triangle to aabb origin
+		_v0.subVectors( triangle.a, _center );
+		_v1.subVectors( triangle.b, _center );
+		_v2.subVectors( triangle.c, _center );
 
-				return false;
+		// compute edge vectors for triangle
+		_f0.subVectors( _v1, _v0 );
+		_f1.subVectors( _v2, _v1 );
+		_f2.subVectors( _v0, _v2 );
 
-			}
+		// test against axes that are given by cross product combinations of the edges of the triangle and the edges of the aabb
+		// make an axis testing of each of the 3 sides of the aabb against each of the 3 sides of the triangle = 9 axis of separation
+		// axis_ij = u_i x f_j (u0, u1, u2 = face normals of aabb = x,y,z axes vectors since aabb is axis aligned)
+		var axes = [
+			0, - _f0.z, _f0.y, 0, - _f1.z, _f1.y, 0, - _f2.z, _f2.y,
+			_f0.z, 0, - _f0.x, _f1.z, 0, - _f1.x, _f2.z, 0, - _f2.x,
+			- _f0.y, _f0.x, 0, - _f1.y, _f1.x, 0, - _f2.y, _f2.x, 0
+		];
+		if ( ! satForAxes( axes, _v0, _v1, _v2, _extents ) ) {
 
-			// compute box center and extents
-			this.getCenter( center );
-			extents.subVectors( this.max, center );
+			return false;
 
-			// translate triangle to aabb origin
-			v0.subVectors( triangle.a, center );
-			v1.subVectors( triangle.b, center );
-			v2.subVectors( triangle.c, center );
+		}
 
-			// compute edge vectors for triangle
-			f0.subVectors( v1, v0 );
-			f1.subVectors( v2, v1 );
-			f2.subVectors( v0, v2 );
+		// test 3 face normals from the aabb
+		axes = [ 1, 0, 0, 0, 1, 0, 0, 0, 1 ];
+		if ( ! satForAxes( axes, _v0, _v1, _v2, _extents ) ) {
 
-			// test against axes that are given by cross product combinations of the edges of the triangle and the edges of the aabb
-			// make an axis testing of each of the 3 sides of the aabb against each of the 3 sides of the triangle = 9 axis of separation
-			// axis_ij = u_i x f_j (u0, u1, u2 = face normals of aabb = x,y,z axes vectors since aabb is axis aligned)
-			var axes = [
-				0, - f0.z, f0.y, 0, - f1.z, f1.y, 0, - f2.z, f2.y,
-				f0.z, 0, - f0.x, f1.z, 0, - f1.x, f2.z, 0, - f2.x,
-				- f0.y, f0.x, 0, - f1.y, f1.x, 0, - f2.y, f2.x, 0
-			];
-			if ( ! satForAxes( axes ) ) {
+			return false;
 
-				return false;
+		}
 
-			}
+		// finally testing the face normal of the triangle
+		// use already existing triangle edge vectors here
+		_triangleNormal.crossVectors( _f0, _f1 );
+		axes = [ _triangleNormal.x, _triangleNormal.y, _triangleNormal.z ];
 
-			// test 3 face normals from the aabb
-			axes = [ 1, 0, 0, 0, 1, 0, 0, 0, 1 ];
-			if ( ! satForAxes( axes ) ) {
+		return satForAxes( axes, _v0, _v1, _v2, _extents );
 
-				return false;
-
-			}
-
-			// finally testing the face normal of the triangle
-			// use already existing triangle edge vectors here
-			triangleNormal.crossVectors( f0, f1 );
-			axes = [ triangleNormal.x, triangleNormal.y, triangleNormal.z ];
-			return satForAxes( axes );
-
-		};
-
-	} )(),
+	},
 
 	clampPoint: function ( point, target ) {
 
@@ -21481,41 +22679,30 @@ Object.assign( Box3.prototype, {
 
 	},
 
-	distanceToPoint: function () {
+	distanceToPoint: function ( point ) {
 
-		var v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		var clampedPoint = _vector.copy( point ).clamp( this.min, this.max );
 
-		return function distanceToPoint( point ) {
+		return clampedPoint.sub( point ).length();
 
-			var clampedPoint = v1.copy( point ).clamp( this.min, this.max );
-			return clampedPoint.sub( point ).length();
+	},
 
-		};
+	getBoundingSphere: function ( target ) {
 
-	}(),
+		if ( target === undefined ) {
 
-	getBoundingSphere: function () {
+			console.error( 'THREE.Box3: .getBoundingSphere() target is now required' );
+			//target = new Sphere(); // removed to avoid cyclic dependency
 
-		var v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		}
 
-		return function getBoundingSphere( target ) {
+		this.getCenter( target.center );
 
-			if ( target === undefined ) {
+		target.radius = this.getSize( _vector ).length() * 0.5;
 
-				console.warn( 'THREE.Box3: .getBoundingSphere() target is now required' );
-				target = new _Sphere_js__WEBPACK_IMPORTED_MODULE_1__["Sphere"]();
+		return target;
 
-			}
-
-			this.getCenter( target.center );
-
-			target.radius = this.getSize( v1 ).length() * 0.5;
-
-			return target;
-
-		};
-
-	}(),
+	},
 
 	intersect: function ( box ) {
 
@@ -21538,41 +22725,26 @@ Object.assign( Box3.prototype, {
 
 	},
 
-	applyMatrix4: function () {
+	applyMatrix4: function ( matrix ) {
 
-		var points = [
-			new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"](),
-			new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"](),
-			new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"](),
-			new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"](),
-			new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"](),
-			new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"](),
-			new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"](),
-			new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]()
-		];
+		// transform of empty box is an empty box.
+		if ( this.isEmpty() ) return this;
 
-		return function applyMatrix4( matrix ) {
+		// NOTE: I am using a binary pattern to specify all 2^3 combinations below
+		_points[ 0 ].set( this.min.x, this.min.y, this.min.z ).applyMatrix4( matrix ); // 000
+		_points[ 1 ].set( this.min.x, this.min.y, this.max.z ).applyMatrix4( matrix ); // 001
+		_points[ 2 ].set( this.min.x, this.max.y, this.min.z ).applyMatrix4( matrix ); // 010
+		_points[ 3 ].set( this.min.x, this.max.y, this.max.z ).applyMatrix4( matrix ); // 011
+		_points[ 4 ].set( this.max.x, this.min.y, this.min.z ).applyMatrix4( matrix ); // 100
+		_points[ 5 ].set( this.max.x, this.min.y, this.max.z ).applyMatrix4( matrix ); // 101
+		_points[ 6 ].set( this.max.x, this.max.y, this.min.z ).applyMatrix4( matrix ); // 110
+		_points[ 7 ].set( this.max.x, this.max.y, this.max.z ).applyMatrix4( matrix ); // 111
 
-			// transform of empty box is an empty box.
-			if ( this.isEmpty() ) return this;
+		this.setFromPoints( _points );
 
-			// NOTE: I am using a binary pattern to specify all 2^3 combinations below
-			points[ 0 ].set( this.min.x, this.min.y, this.min.z ).applyMatrix4( matrix ); // 000
-			points[ 1 ].set( this.min.x, this.min.y, this.max.z ).applyMatrix4( matrix ); // 001
-			points[ 2 ].set( this.min.x, this.max.y, this.min.z ).applyMatrix4( matrix ); // 010
-			points[ 3 ].set( this.min.x, this.max.y, this.max.z ).applyMatrix4( matrix ); // 011
-			points[ 4 ].set( this.max.x, this.min.y, this.min.z ).applyMatrix4( matrix ); // 100
-			points[ 5 ].set( this.max.x, this.min.y, this.max.z ).applyMatrix4( matrix ); // 101
-			points[ 6 ].set( this.max.x, this.max.y, this.min.z ).applyMatrix4( matrix ); // 110
-			points[ 7 ].set( this.max.x, this.max.y, this.max.z ).applyMatrix4( matrix ); // 111
+		return this;
 
-			this.setFromPoints( points );
-
-			return this;
-
-		};
-
-	}(),
+	},
 
 	translate: function ( offset ) {
 
@@ -21591,61 +22763,86 @@ Object.assign( Box3.prototype, {
 
 } );
 
+function satForAxes( axes, v0, v1, v2, extents ) {
+
+	var i, j;
+
+	for ( i = 0, j = axes.length - 3; i <= j; i += 3 ) {
+
+		_testAxis.fromArray( axes, i );
+		// project the aabb onto the seperating axis
+		var r = extents.x * Math.abs( _testAxis.x ) + extents.y * Math.abs( _testAxis.y ) + extents.z * Math.abs( _testAxis.z );
+		// project all 3 vertices of the triangle onto the seperating axis
+		var p0 = v0.dot( _testAxis );
+		var p1 = v1.dot( _testAxis );
+		var p2 = v2.dot( _testAxis );
+		// actual test, basically see if either of the most extreme of the triangle points intersects r
+		if ( Math.max( - Math.max( p0, p1, p2 ), Math.min( p0, p1, p2 ) ) > r ) {
+
+			// points of the projected triangle are outside the projected half-length of the aabb
+			// the axis is seperating and we can exit
+			return false;
+
+		}
+
+	}
+
+	return true;
+
+}
 
 
 
 
 /***/ }),
 
-/***/ "./node_modules/three/src/math/Math.js":
-/*!*********************************************!*\
-  !*** ./node_modules/three/src/math/Math.js ***!
-  \*********************************************/
-/*! exports provided: _Math */
+/***/ "./node_modules/three/src/math/MathUtils.js":
+/*!**************************************************!*\
+  !*** ./node_modules/three/src/math/MathUtils.js ***!
+  \**************************************************/
+/*! exports provided: MathUtils */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 __webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "_Math", function() { return _Math; });
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "MathUtils", function() { return MathUtils; });
 /**
  * @author alteredq / http://alteredqualia.com/
  * @author mrdoob / http://mrdoob.com/
+ * @author WestLangley / http://github.com/WestLangley
+ * @author thezwap
  */
 
-var _Math = {
+var _lut = [];
+
+for ( var i = 0; i < 256; i ++ ) {
+
+	_lut[ i ] = ( i < 16 ? '0' : '' ) + ( i ).toString( 16 );
+
+}
+
+var MathUtils = {
 
 	DEG2RAD: Math.PI / 180,
 	RAD2DEG: 180 / Math.PI,
 
-	generateUUID: ( function () {
+	generateUUID: function () {
 
 		// http://stackoverflow.com/questions/105034/how-to-create-a-guid-uuid-in-javascript/21963136#21963136
 
-		var lut = [];
+		var d0 = Math.random() * 0xffffffff | 0;
+		var d1 = Math.random() * 0xffffffff | 0;
+		var d2 = Math.random() * 0xffffffff | 0;
+		var d3 = Math.random() * 0xffffffff | 0;
+		var uuid = _lut[ d0 & 0xff ] + _lut[ d0 >> 8 & 0xff ] + _lut[ d0 >> 16 & 0xff ] + _lut[ d0 >> 24 & 0xff ] + '-' +
+			_lut[ d1 & 0xff ] + _lut[ d1 >> 8 & 0xff ] + '-' + _lut[ d1 >> 16 & 0x0f | 0x40 ] + _lut[ d1 >> 24 & 0xff ] + '-' +
+			_lut[ d2 & 0x3f | 0x80 ] + _lut[ d2 >> 8 & 0xff ] + '-' + _lut[ d2 >> 16 & 0xff ] + _lut[ d2 >> 24 & 0xff ] +
+			_lut[ d3 & 0xff ] + _lut[ d3 >> 8 & 0xff ] + _lut[ d3 >> 16 & 0xff ] + _lut[ d3 >> 24 & 0xff ];
 
-		for ( var i = 0; i < 256; i ++ ) {
+		// .toUpperCase() here flattens concatenated strings to save heap memory space.
+		return uuid.toUpperCase();
 
-			lut[ i ] = ( i < 16 ? '0' : '' ) + ( i ).toString( 16 );
-
-		}
-
-		return function generateUUID() {
-
-			var d0 = Math.random() * 0xffffffff | 0;
-			var d1 = Math.random() * 0xffffffff | 0;
-			var d2 = Math.random() * 0xffffffff | 0;
-			var d3 = Math.random() * 0xffffffff | 0;
-			var uuid = lut[ d0 & 0xff ] + lut[ d0 >> 8 & 0xff ] + lut[ d0 >> 16 & 0xff ] + lut[ d0 >> 24 & 0xff ] + '-' +
-				lut[ d1 & 0xff ] + lut[ d1 >> 8 & 0xff ] + '-' + lut[ d1 >> 16 & 0x0f | 0x40 ] + lut[ d1 >> 24 & 0xff ] + '-' +
-				lut[ d2 & 0x3f | 0x80 ] + lut[ d2 >> 8 & 0xff ] + '-' + lut[ d2 >> 16 & 0xff ] + lut[ d2 >> 24 & 0xff ] +
-				lut[ d3 & 0xff ] + lut[ d3 >> 8 & 0xff ] + lut[ d3 >> 16 & 0xff ] + lut[ d3 >> 24 & 0xff ];
-
-			// .toUpperCase() here flattens concatenated strings to save heap memory space.
-			return uuid.toUpperCase();
-
-		};
-
-	} )(),
+	},
 
 	clamp: function ( value, min, max ) {
 
@@ -21728,13 +22925,13 @@ var _Math = {
 
 	degToRad: function ( degrees ) {
 
-		return degrees * _Math.DEG2RAD;
+		return degrees * MathUtils.DEG2RAD;
 
 	},
 
 	radToDeg: function ( radians ) {
 
-		return radians * _Math.RAD2DEG;
+		return radians * MathUtils.RAD2DEG;
 
 	},
 
@@ -21754,9 +22951,434 @@ var _Math = {
 
 		return Math.pow( 2, Math.floor( Math.log( value ) / Math.LN2 ) );
 
+	},
+
+	setQuaternionFromProperEuler: function ( q, a, b, c, order ) {
+
+		// Intrinsic Proper Euler Angles - see https://en.wikipedia.org/wiki/Euler_angles
+
+		// rotations are applied to the axes in the order specified by 'order'
+		// rotation by angle 'a' is applied first, then by angle 'b', then by angle 'c'
+		// angles are in radians
+
+		var cos = Math.cos;
+		var sin = Math.sin;
+
+		var c2 = cos( b / 2 );
+		var s2 = sin( b / 2 );
+
+		var c13 = cos( ( a + c ) / 2 );
+		var s13 = sin( ( a + c ) / 2 );
+
+		var c1_3 = cos( ( a - c ) / 2 );
+		var s1_3 = sin( ( a - c ) / 2 );
+
+		var c3_1 = cos( ( c - a ) / 2 );
+		var s3_1 = sin( ( c - a ) / 2 );
+
+		if ( order === 'XYX' ) {
+
+			q.set( c2 * s13, s2 * c1_3, s2 * s1_3, c2 * c13 );
+
+		} else if ( order === 'YZY' ) {
+
+			q.set( s2 * s1_3, c2 * s13, s2 * c1_3, c2 * c13 );
+
+		} else if ( order === 'ZXZ' ) {
+
+			q.set( s2 * c1_3, s2 * s1_3, c2 * s13, c2 * c13 );
+
+		} else if ( order === 'XZX' ) {
+
+			q.set( c2 * s13, s2 * s3_1, s2 * c3_1, c2 * c13 );
+
+		} else if ( order === 'YXY' ) {
+
+			q.set( s2 * c3_1, c2 * s13, s2 * s3_1, c2 * c13 );
+
+		} else if ( order === 'ZYZ' ) {
+
+			q.set( s2 * s3_1, s2 * c3_1, c2 * s13, c2 * c13 );
+
+		} else {
+
+			console.warn( 'THREE.MathUtils: .setQuaternionFromProperEuler() encountered an unknown order.' );
+
+		}
+
 	}
 
 };
+
+
+
+
+
+/***/ }),
+
+/***/ "./node_modules/three/src/math/Matrix3.js":
+/*!************************************************!*\
+  !*** ./node_modules/three/src/math/Matrix3.js ***!
+  \************************************************/
+/*! exports provided: Matrix3 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Matrix3", function() { return Matrix3; });
+/**
+ * @author alteredq / http://alteredqualia.com/
+ * @author WestLangley / http://github.com/WestLangley
+ * @author bhouston / http://clara.io
+ * @author tschw
+ */
+
+function Matrix3() {
+
+	this.elements = [
+
+		1, 0, 0,
+		0, 1, 0,
+		0, 0, 1
+
+	];
+
+	if ( arguments.length > 0 ) {
+
+		console.error( 'THREE.Matrix3: the constructor no longer reads arguments. use .set() instead.' );
+
+	}
+
+}
+
+Object.assign( Matrix3.prototype, {
+
+	isMatrix3: true,
+
+	set: function ( n11, n12, n13, n21, n22, n23, n31, n32, n33 ) {
+
+		var te = this.elements;
+
+		te[ 0 ] = n11; te[ 1 ] = n21; te[ 2 ] = n31;
+		te[ 3 ] = n12; te[ 4 ] = n22; te[ 5 ] = n32;
+		te[ 6 ] = n13; te[ 7 ] = n23; te[ 8 ] = n33;
+
+		return this;
+
+	},
+
+	identity: function () {
+
+		this.set(
+
+			1, 0, 0,
+			0, 1, 0,
+			0, 0, 1
+
+		);
+
+		return this;
+
+	},
+
+	clone: function () {
+
+		return new this.constructor().fromArray( this.elements );
+
+	},
+
+	copy: function ( m ) {
+
+		var te = this.elements;
+		var me = m.elements;
+
+		te[ 0 ] = me[ 0 ]; te[ 1 ] = me[ 1 ]; te[ 2 ] = me[ 2 ];
+		te[ 3 ] = me[ 3 ]; te[ 4 ] = me[ 4 ]; te[ 5 ] = me[ 5 ];
+		te[ 6 ] = me[ 6 ]; te[ 7 ] = me[ 7 ]; te[ 8 ] = me[ 8 ];
+
+		return this;
+
+	},
+
+	extractBasis: function ( xAxis, yAxis, zAxis ) {
+
+		xAxis.setFromMatrix3Column( this, 0 );
+		yAxis.setFromMatrix3Column( this, 1 );
+		zAxis.setFromMatrix3Column( this, 2 );
+
+		return this;
+
+	},
+
+	setFromMatrix4: function ( m ) {
+
+		var me = m.elements;
+
+		this.set(
+
+			me[ 0 ], me[ 4 ], me[ 8 ],
+			me[ 1 ], me[ 5 ], me[ 9 ],
+			me[ 2 ], me[ 6 ], me[ 10 ]
+
+		);
+
+		return this;
+
+	},
+
+	multiply: function ( m ) {
+
+		return this.multiplyMatrices( this, m );
+
+	},
+
+	premultiply: function ( m ) {
+
+		return this.multiplyMatrices( m, this );
+
+	},
+
+	multiplyMatrices: function ( a, b ) {
+
+		var ae = a.elements;
+		var be = b.elements;
+		var te = this.elements;
+
+		var a11 = ae[ 0 ], a12 = ae[ 3 ], a13 = ae[ 6 ];
+		var a21 = ae[ 1 ], a22 = ae[ 4 ], a23 = ae[ 7 ];
+		var a31 = ae[ 2 ], a32 = ae[ 5 ], a33 = ae[ 8 ];
+
+		var b11 = be[ 0 ], b12 = be[ 3 ], b13 = be[ 6 ];
+		var b21 = be[ 1 ], b22 = be[ 4 ], b23 = be[ 7 ];
+		var b31 = be[ 2 ], b32 = be[ 5 ], b33 = be[ 8 ];
+
+		te[ 0 ] = a11 * b11 + a12 * b21 + a13 * b31;
+		te[ 3 ] = a11 * b12 + a12 * b22 + a13 * b32;
+		te[ 6 ] = a11 * b13 + a12 * b23 + a13 * b33;
+
+		te[ 1 ] = a21 * b11 + a22 * b21 + a23 * b31;
+		te[ 4 ] = a21 * b12 + a22 * b22 + a23 * b32;
+		te[ 7 ] = a21 * b13 + a22 * b23 + a23 * b33;
+
+		te[ 2 ] = a31 * b11 + a32 * b21 + a33 * b31;
+		te[ 5 ] = a31 * b12 + a32 * b22 + a33 * b32;
+		te[ 8 ] = a31 * b13 + a32 * b23 + a33 * b33;
+
+		return this;
+
+	},
+
+	multiplyScalar: function ( s ) {
+
+		var te = this.elements;
+
+		te[ 0 ] *= s; te[ 3 ] *= s; te[ 6 ] *= s;
+		te[ 1 ] *= s; te[ 4 ] *= s; te[ 7 ] *= s;
+		te[ 2 ] *= s; te[ 5 ] *= s; te[ 8 ] *= s;
+
+		return this;
+
+	},
+
+	determinant: function () {
+
+		var te = this.elements;
+
+		var a = te[ 0 ], b = te[ 1 ], c = te[ 2 ],
+			d = te[ 3 ], e = te[ 4 ], f = te[ 5 ],
+			g = te[ 6 ], h = te[ 7 ], i = te[ 8 ];
+
+		return a * e * i - a * f * h - b * d * i + b * f * g + c * d * h - c * e * g;
+
+	},
+
+	getInverse: function ( matrix, throwOnDegenerate ) {
+
+		if ( throwOnDegenerate !== undefined ) {
+
+			console.warn( "THREE.Matrix3: .getInverse() can no longer be configured to throw on degenerate." );
+
+		}
+
+		var me = matrix.elements,
+			te = this.elements,
+
+			n11 = me[ 0 ], n21 = me[ 1 ], n31 = me[ 2 ],
+			n12 = me[ 3 ], n22 = me[ 4 ], n32 = me[ 5 ],
+			n13 = me[ 6 ], n23 = me[ 7 ], n33 = me[ 8 ],
+
+			t11 = n33 * n22 - n32 * n23,
+			t12 = n32 * n13 - n33 * n12,
+			t13 = n23 * n12 - n22 * n13,
+
+			det = n11 * t11 + n21 * t12 + n31 * t13;
+
+		if ( det === 0 ) return this.set( 0, 0, 0, 0, 0, 0, 0, 0, 0 );
+
+		var detInv = 1 / det;
+
+		te[ 0 ] = t11 * detInv;
+		te[ 1 ] = ( n31 * n23 - n33 * n21 ) * detInv;
+		te[ 2 ] = ( n32 * n21 - n31 * n22 ) * detInv;
+
+		te[ 3 ] = t12 * detInv;
+		te[ 4 ] = ( n33 * n11 - n31 * n13 ) * detInv;
+		te[ 5 ] = ( n31 * n12 - n32 * n11 ) * detInv;
+
+		te[ 6 ] = t13 * detInv;
+		te[ 7 ] = ( n21 * n13 - n23 * n11 ) * detInv;
+		te[ 8 ] = ( n22 * n11 - n21 * n12 ) * detInv;
+
+		return this;
+
+	},
+
+	transpose: function () {
+
+		var tmp, m = this.elements;
+
+		tmp = m[ 1 ]; m[ 1 ] = m[ 3 ]; m[ 3 ] = tmp;
+		tmp = m[ 2 ]; m[ 2 ] = m[ 6 ]; m[ 6 ] = tmp;
+		tmp = m[ 5 ]; m[ 5 ] = m[ 7 ]; m[ 7 ] = tmp;
+
+		return this;
+
+	},
+
+	getNormalMatrix: function ( matrix4 ) {
+
+		return this.setFromMatrix4( matrix4 ).getInverse( this ).transpose();
+
+	},
+
+	transposeIntoArray: function ( r ) {
+
+		var m = this.elements;
+
+		r[ 0 ] = m[ 0 ];
+		r[ 1 ] = m[ 3 ];
+		r[ 2 ] = m[ 6 ];
+		r[ 3 ] = m[ 1 ];
+		r[ 4 ] = m[ 4 ];
+		r[ 5 ] = m[ 7 ];
+		r[ 6 ] = m[ 2 ];
+		r[ 7 ] = m[ 5 ];
+		r[ 8 ] = m[ 8 ];
+
+		return this;
+
+	},
+
+	setUvTransform: function ( tx, ty, sx, sy, rotation, cx, cy ) {
+
+		var c = Math.cos( rotation );
+		var s = Math.sin( rotation );
+
+		this.set(
+			sx * c, sx * s, - sx * ( c * cx + s * cy ) + cx + tx,
+			- sy * s, sy * c, - sy * ( - s * cx + c * cy ) + cy + ty,
+			0, 0, 1
+		);
+
+	},
+
+	scale: function ( sx, sy ) {
+
+		var te = this.elements;
+
+		te[ 0 ] *= sx; te[ 3 ] *= sx; te[ 6 ] *= sx;
+		te[ 1 ] *= sy; te[ 4 ] *= sy; te[ 7 ] *= sy;
+
+		return this;
+
+	},
+
+	rotate: function ( theta ) {
+
+		var c = Math.cos( theta );
+		var s = Math.sin( theta );
+
+		var te = this.elements;
+
+		var a11 = te[ 0 ], a12 = te[ 3 ], a13 = te[ 6 ];
+		var a21 = te[ 1 ], a22 = te[ 4 ], a23 = te[ 7 ];
+
+		te[ 0 ] = c * a11 + s * a21;
+		te[ 3 ] = c * a12 + s * a22;
+		te[ 6 ] = c * a13 + s * a23;
+
+		te[ 1 ] = - s * a11 + c * a21;
+		te[ 4 ] = - s * a12 + c * a22;
+		te[ 7 ] = - s * a13 + c * a23;
+
+		return this;
+
+	},
+
+	translate: function ( tx, ty ) {
+
+		var te = this.elements;
+
+		te[ 0 ] += tx * te[ 2 ]; te[ 3 ] += tx * te[ 5 ]; te[ 6 ] += tx * te[ 8 ];
+		te[ 1 ] += ty * te[ 2 ]; te[ 4 ] += ty * te[ 5 ]; te[ 7 ] += ty * te[ 8 ];
+
+		return this;
+
+	},
+
+	equals: function ( matrix ) {
+
+		var te = this.elements;
+		var me = matrix.elements;
+
+		for ( var i = 0; i < 9; i ++ ) {
+
+			if ( te[ i ] !== me[ i ] ) return false;
+
+		}
+
+		return true;
+
+	},
+
+	fromArray: function ( array, offset ) {
+
+		if ( offset === undefined ) offset = 0;
+
+		for ( var i = 0; i < 9; i ++ ) {
+
+			this.elements[ i ] = array[ i + offset ];
+
+		}
+
+		return this;
+
+	},
+
+	toArray: function ( array, offset ) {
+
+		if ( array === undefined ) array = [];
+		if ( offset === undefined ) offset = 0;
+
+		var te = this.elements;
+
+		array[ offset ] = te[ 0 ];
+		array[ offset + 1 ] = te[ 1 ];
+		array[ offset + 2 ] = te[ 2 ];
+
+		array[ offset + 3 ] = te[ 3 ];
+		array[ offset + 4 ] = te[ 4 ];
+		array[ offset + 5 ] = te[ 5 ];
+
+		array[ offset + 6 ] = te[ 6 ];
+		array[ offset + 7 ] = te[ 7 ];
+		array[ offset + 8 ] = te[ 8 ];
+
+		return array;
+
+	}
+
+} );
 
 
 
@@ -21776,6 +23398,14 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Matrix4", function() { return Matrix4; });
 /* harmony import */ var _Vector3_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Vector3.js */ "./node_modules/three/src/math/Vector3.js");
 
+
+var _v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _m1 = new Matrix4();
+var _zero = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]( 0, 0, 0 );
+var _one = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]( 1, 1, 1 );
+var _x = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _y = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _z = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
 
 /**
  * @author mrdoob / http://mrdoob.com/
@@ -21896,46 +23526,40 @@ Object.assign( Matrix4.prototype, {
 
 	},
 
-	extractRotation: function () {
+	extractRotation: function ( m ) {
 
-		var v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		// this method does not support reflection matrices
 
-		return function extractRotation( m ) {
+		var te = this.elements;
+		var me = m.elements;
 
-			// this method does not support reflection matrices
+		var scaleX = 1 / _v1.setFromMatrixColumn( m, 0 ).length();
+		var scaleY = 1 / _v1.setFromMatrixColumn( m, 1 ).length();
+		var scaleZ = 1 / _v1.setFromMatrixColumn( m, 2 ).length();
 
-			var te = this.elements;
-			var me = m.elements;
+		te[ 0 ] = me[ 0 ] * scaleX;
+		te[ 1 ] = me[ 1 ] * scaleX;
+		te[ 2 ] = me[ 2 ] * scaleX;
+		te[ 3 ] = 0;
 
-			var scaleX = 1 / v1.setFromMatrixColumn( m, 0 ).length();
-			var scaleY = 1 / v1.setFromMatrixColumn( m, 1 ).length();
-			var scaleZ = 1 / v1.setFromMatrixColumn( m, 2 ).length();
+		te[ 4 ] = me[ 4 ] * scaleY;
+		te[ 5 ] = me[ 5 ] * scaleY;
+		te[ 6 ] = me[ 6 ] * scaleY;
+		te[ 7 ] = 0;
 
-			te[ 0 ] = me[ 0 ] * scaleX;
-			te[ 1 ] = me[ 1 ] * scaleX;
-			te[ 2 ] = me[ 2 ] * scaleX;
-			te[ 3 ] = 0;
+		te[ 8 ] = me[ 8 ] * scaleZ;
+		te[ 9 ] = me[ 9 ] * scaleZ;
+		te[ 10 ] = me[ 10 ] * scaleZ;
+		te[ 11 ] = 0;
 
-			te[ 4 ] = me[ 4 ] * scaleY;
-			te[ 5 ] = me[ 5 ] * scaleY;
-			te[ 6 ] = me[ 6 ] * scaleY;
-			te[ 7 ] = 0;
+		te[ 12 ] = 0;
+		te[ 13 ] = 0;
+		te[ 14 ] = 0;
+		te[ 15 ] = 1;
 
-			te[ 8 ] = me[ 8 ] * scaleZ;
-			te[ 9 ] = me[ 9 ] * scaleZ;
-			te[ 10 ] = me[ 10 ] * scaleZ;
-			te[ 11 ] = 0;
+		return this;
 
-			te[ 12 ] = 0;
-			te[ 13 ] = 0;
-			te[ 14 ] = 0;
-			te[ 15 ] = 1;
-
-			return this;
-
-		};
-
-	}(),
+	},
 
 	makeRotationFromEuler: function ( euler ) {
 
@@ -22065,73 +23689,58 @@ Object.assign( Matrix4.prototype, {
 
 	},
 
-	makeRotationFromQuaternion: function () {
+	makeRotationFromQuaternion: function ( q ) {
 
-		var zero = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]( 0, 0, 0 );
-		var one = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]( 1, 1, 1 );
+		return this.compose( _zero, q, _one );
 
-		return function makeRotationFromQuaternion( q ) {
+	},
 
-			return this.compose( zero, q, one );
+	lookAt: function ( eye, target, up ) {
 
-		};
+		var te = this.elements;
 
-	}(),
+		_z.subVectors( eye, target );
 
-	lookAt: function () {
+		if ( _z.lengthSq() === 0 ) {
 
-		var x = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var y = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var z = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+			// eye and target are in the same position
 
-		return function lookAt( eye, target, up ) {
+			_z.z = 1;
 
-			var te = this.elements;
+		}
 
-			z.subVectors( eye, target );
+		_z.normalize();
+		_x.crossVectors( up, _z );
 
-			if ( z.lengthSq() === 0 ) {
+		if ( _x.lengthSq() === 0 ) {
 
-				// eye and target are in the same position
+			// up and z are parallel
 
-				z.z = 1;
+			if ( Math.abs( up.z ) === 1 ) {
 
-			}
+				_z.x += 0.0001;
 
-			z.normalize();
-			x.crossVectors( up, z );
+			} else {
 
-			if ( x.lengthSq() === 0 ) {
-
-				// up and z are parallel
-
-				if ( Math.abs( up.z ) === 1 ) {
-
-					z.x += 0.0001;
-
-				} else {
-
-					z.z += 0.0001;
-
-				}
-
-				z.normalize();
-				x.crossVectors( up, z );
+				_z.z += 0.0001;
 
 			}
 
-			x.normalize();
-			y.crossVectors( z, x );
+			_z.normalize();
+			_x.crossVectors( up, _z );
 
-			te[ 0 ] = x.x; te[ 4 ] = y.x; te[ 8 ] = z.x;
-			te[ 1 ] = x.y; te[ 5 ] = y.y; te[ 9 ] = z.y;
-			te[ 2 ] = x.z; te[ 6 ] = y.z; te[ 10 ] = z.z;
+		}
 
-			return this;
+		_x.normalize();
+		_y.crossVectors( _z, _x );
 
-		};
+		te[ 0 ] = _x.x; te[ 4 ] = _y.x; te[ 8 ] = _z.x;
+		te[ 1 ] = _x.y; te[ 5 ] = _y.y; te[ 9 ] = _z.y;
+		te[ 2 ] = _x.z; te[ 6 ] = _y.z; te[ 10 ] = _z.z;
 
-	}(),
+		return this;
+
+	},
 
 	multiply: function ( m, n ) {
 
@@ -22205,30 +23814,6 @@ Object.assign( Matrix4.prototype, {
 
 	},
 
-	applyToBufferAttribute: function () {
-
-		var v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-
-		return function applyToBufferAttribute( attribute ) {
-
-			for ( var i = 0, l = attribute.count; i < l; i ++ ) {
-
-				v1.x = attribute.getX( i );
-				v1.y = attribute.getY( i );
-				v1.z = attribute.getZ( i );
-
-				v1.applyMatrix4( this );
-
-				attribute.setXYZ( i, v1.x, v1.y, v1.z );
-
-			}
-
-			return attribute;
-
-		};
-
-	}(),
-
 	determinant: function () {
 
 		var te = this.elements;
@@ -22296,19 +23881,35 @@ Object.assign( Matrix4.prototype, {
 
 	},
 
-	setPosition: function ( v ) {
+	setPosition: function ( x, y, z ) {
 
 		var te = this.elements;
 
-		te[ 12 ] = v.x;
-		te[ 13 ] = v.y;
-		te[ 14 ] = v.z;
+		if ( x.isVector3 ) {
+
+			te[ 12 ] = x.x;
+			te[ 13 ] = x.y;
+			te[ 14 ] = x.z;
+
+		} else {
+
+			te[ 12 ] = x;
+			te[ 13 ] = y;
+			te[ 14 ] = z;
+
+		}
 
 		return this;
 
 	},
 
 	getInverse: function ( m, throwOnDegenerate ) {
+
+		if ( throwOnDegenerate !== undefined ) {
+
+			console.warn( "THREE.Matrix4: .getInverse() can no longer be configured to throw on degenerate." );
+
+		}
 
 		// based on http://www.euclideanspace.com/maths/algebra/matrix/functions/inverse/fourD/index.htm
 		var te = this.elements,
@@ -22326,23 +23927,7 @@ Object.assign( Matrix4.prototype, {
 
 		var det = n11 * t11 + n21 * t12 + n31 * t13 + n41 * t14;
 
-		if ( det === 0 ) {
-
-			var msg = "THREE.Matrix4: .getInverse() can't invert matrix, determinant is 0";
-
-			if ( throwOnDegenerate === true ) {
-
-				throw new Error( msg );
-
-			} else {
-
-				console.warn( msg );
-
-			}
-
-			return this.identity();
-
-		}
+		if ( det === 0 ) return this.set( 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 );
 
 		var detInv = 1 / det;
 
@@ -22527,81 +24112,74 @@ Object.assign( Matrix4.prototype, {
 
 		var sx = scale.x, sy = scale.y, sz = scale.z;
 
-	        te[ 0 ] = ( 1 - ( yy + zz ) ) * sx;
-	        te[ 1 ] = ( xy + wz ) * sx;
-	        te[ 2 ] = ( xz - wy ) * sx;
-	        te[ 3 ] = 0;
+		te[ 0 ] = ( 1 - ( yy + zz ) ) * sx;
+		te[ 1 ] = ( xy + wz ) * sx;
+		te[ 2 ] = ( xz - wy ) * sx;
+		te[ 3 ] = 0;
 
-	        te[ 4 ] = ( xy - wz ) * sy;
-	        te[ 5 ] = ( 1 - ( xx + zz ) ) * sy;
-	        te[ 6 ] = ( yz + wx ) * sy;
-	        te[ 7 ] = 0;
+		te[ 4 ] = ( xy - wz ) * sy;
+		te[ 5 ] = ( 1 - ( xx + zz ) ) * sy;
+		te[ 6 ] = ( yz + wx ) * sy;
+		te[ 7 ] = 0;
 
-	        te[ 8 ] = ( xz + wy ) * sz;
-	        te[ 9 ] = ( yz - wx ) * sz;
-	        te[ 10 ] = ( 1 - ( xx + yy ) ) * sz;
-	        te[ 11 ] = 0;
+		te[ 8 ] = ( xz + wy ) * sz;
+		te[ 9 ] = ( yz - wx ) * sz;
+		te[ 10 ] = ( 1 - ( xx + yy ) ) * sz;
+		te[ 11 ] = 0;
 
-	        te[ 12 ] = position.x;
-	        te[ 13 ] = position.y;
-	        te[ 14 ] = position.z;
-	        te[ 15 ] = 1;
+		te[ 12 ] = position.x;
+		te[ 13 ] = position.y;
+		te[ 14 ] = position.z;
+		te[ 15 ] = 1;
 
-	        return this;
+		return this;
 
 	},
 
-	decompose: function () {
+	decompose: function ( position, quaternion, scale ) {
 
-		var vector = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var matrix = new Matrix4();
+		var te = this.elements;
 
-		return function decompose( position, quaternion, scale ) {
+		var sx = _v1.set( te[ 0 ], te[ 1 ], te[ 2 ] ).length();
+		var sy = _v1.set( te[ 4 ], te[ 5 ], te[ 6 ] ).length();
+		var sz = _v1.set( te[ 8 ], te[ 9 ], te[ 10 ] ).length();
 
-			var te = this.elements;
+		// if determine is negative, we need to invert one scale
+		var det = this.determinant();
+		if ( det < 0 ) sx = - sx;
 
-			var sx = vector.set( te[ 0 ], te[ 1 ], te[ 2 ] ).length();
-			var sy = vector.set( te[ 4 ], te[ 5 ], te[ 6 ] ).length();
-			var sz = vector.set( te[ 8 ], te[ 9 ], te[ 10 ] ).length();
+		position.x = te[ 12 ];
+		position.y = te[ 13 ];
+		position.z = te[ 14 ];
 
-			// if determine is negative, we need to invert one scale
-			var det = this.determinant();
-			if ( det < 0 ) sx = - sx;
+		// scale the rotation part
+		_m1.copy( this );
 
-			position.x = te[ 12 ];
-			position.y = te[ 13 ];
-			position.z = te[ 14 ];
+		var invSX = 1 / sx;
+		var invSY = 1 / sy;
+		var invSZ = 1 / sz;
 
-			// scale the rotation part
-			matrix.copy( this );
+		_m1.elements[ 0 ] *= invSX;
+		_m1.elements[ 1 ] *= invSX;
+		_m1.elements[ 2 ] *= invSX;
 
-			var invSX = 1 / sx;
-			var invSY = 1 / sy;
-			var invSZ = 1 / sz;
+		_m1.elements[ 4 ] *= invSY;
+		_m1.elements[ 5 ] *= invSY;
+		_m1.elements[ 6 ] *= invSY;
 
-			matrix.elements[ 0 ] *= invSX;
-			matrix.elements[ 1 ] *= invSX;
-			matrix.elements[ 2 ] *= invSX;
+		_m1.elements[ 8 ] *= invSZ;
+		_m1.elements[ 9 ] *= invSZ;
+		_m1.elements[ 10 ] *= invSZ;
 
-			matrix.elements[ 4 ] *= invSY;
-			matrix.elements[ 5 ] *= invSY;
-			matrix.elements[ 6 ] *= invSY;
+		quaternion.setFromRotationMatrix( _m1 );
 
-			matrix.elements[ 8 ] *= invSZ;
-			matrix.elements[ 9 ] *= invSZ;
-			matrix.elements[ 10 ] *= invSZ;
+		scale.x = sx;
+		scale.y = sy;
+		scale.z = sz;
 
-			quaternion.setFromRotationMatrix( matrix );
+		return this;
 
-			scale.x = sx;
-			scale.y = sy;
-			scale.z = sz;
-
-			return this;
-
-		};
-
-	}(),
+	},
 
 	makePerspective: function ( left, right, top, bottom, near, far ) {
 
@@ -22717,6 +24295,253 @@ Object.assign( Matrix4.prototype, {
 
 /***/ }),
 
+/***/ "./node_modules/three/src/math/Plane.js":
+/*!**********************************************!*\
+  !*** ./node_modules/three/src/math/Plane.js ***!
+  \**********************************************/
+/*! exports provided: Plane */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+__webpack_require__.r(__webpack_exports__);
+/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Plane", function() { return Plane; });
+/* harmony import */ var _Matrix3_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Matrix3.js */ "./node_modules/three/src/math/Matrix3.js");
+/* harmony import */ var _Vector3_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./Vector3.js */ "./node_modules/three/src/math/Vector3.js");
+
+
+
+/**
+ * @author bhouston / http://clara.io
+ */
+
+var _vector1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_1__["Vector3"]();
+var _vector2 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_1__["Vector3"]();
+var _normalMatrix = new _Matrix3_js__WEBPACK_IMPORTED_MODULE_0__["Matrix3"]();
+
+function Plane( normal, constant ) {
+
+	// normal is assumed to be normalized
+
+	this.normal = ( normal !== undefined ) ? normal : new _Vector3_js__WEBPACK_IMPORTED_MODULE_1__["Vector3"]( 1, 0, 0 );
+	this.constant = ( constant !== undefined ) ? constant : 0;
+
+}
+
+Object.assign( Plane.prototype, {
+
+	isPlane: true,
+
+	set: function ( normal, constant ) {
+
+		this.normal.copy( normal );
+		this.constant = constant;
+
+		return this;
+
+	},
+
+	setComponents: function ( x, y, z, w ) {
+
+		this.normal.set( x, y, z );
+		this.constant = w;
+
+		return this;
+
+	},
+
+	setFromNormalAndCoplanarPoint: function ( normal, point ) {
+
+		this.normal.copy( normal );
+		this.constant = - point.dot( this.normal );
+
+		return this;
+
+	},
+
+	setFromCoplanarPoints: function ( a, b, c ) {
+
+		var normal = _vector1.subVectors( c, b ).cross( _vector2.subVectors( a, b ) ).normalize();
+
+		// Q: should an error be thrown if normal is zero (e.g. degenerate plane)?
+
+		this.setFromNormalAndCoplanarPoint( normal, a );
+
+		return this;
+
+	},
+
+	clone: function () {
+
+		return new this.constructor().copy( this );
+
+	},
+
+	copy: function ( plane ) {
+
+		this.normal.copy( plane.normal );
+		this.constant = plane.constant;
+
+		return this;
+
+	},
+
+	normalize: function () {
+
+		// Note: will lead to a divide by zero if the plane is invalid.
+
+		var inverseNormalLength = 1.0 / this.normal.length();
+		this.normal.multiplyScalar( inverseNormalLength );
+		this.constant *= inverseNormalLength;
+
+		return this;
+
+	},
+
+	negate: function () {
+
+		this.constant *= - 1;
+		this.normal.negate();
+
+		return this;
+
+	},
+
+	distanceToPoint: function ( point ) {
+
+		return this.normal.dot( point ) + this.constant;
+
+	},
+
+	distanceToSphere: function ( sphere ) {
+
+		return this.distanceToPoint( sphere.center ) - sphere.radius;
+
+	},
+
+	projectPoint: function ( point, target ) {
+
+		if ( target === undefined ) {
+
+			console.warn( 'THREE.Plane: .projectPoint() target is now required' );
+			target = new _Vector3_js__WEBPACK_IMPORTED_MODULE_1__["Vector3"]();
+
+		}
+
+		return target.copy( this.normal ).multiplyScalar( - this.distanceToPoint( point ) ).add( point );
+
+	},
+
+	intersectLine: function ( line, target ) {
+
+		if ( target === undefined ) {
+
+			console.warn( 'THREE.Plane: .intersectLine() target is now required' );
+			target = new _Vector3_js__WEBPACK_IMPORTED_MODULE_1__["Vector3"]();
+
+		}
+
+		var direction = line.delta( _vector1 );
+
+		var denominator = this.normal.dot( direction );
+
+		if ( denominator === 0 ) {
+
+			// line is coplanar, return origin
+			if ( this.distanceToPoint( line.start ) === 0 ) {
+
+				return target.copy( line.start );
+
+			}
+
+			// Unsure if this is the correct method to handle this case.
+			return undefined;
+
+		}
+
+		var t = - ( line.start.dot( this.normal ) + this.constant ) / denominator;
+
+		if ( t < 0 || t > 1 ) {
+
+			return undefined;
+
+		}
+
+		return target.copy( direction ).multiplyScalar( t ).add( line.start );
+
+	},
+
+	intersectsLine: function ( line ) {
+
+		// Note: this tests if a line intersects the plane, not whether it (or its end-points) are coplanar with it.
+
+		var startSign = this.distanceToPoint( line.start );
+		var endSign = this.distanceToPoint( line.end );
+
+		return ( startSign < 0 && endSign > 0 ) || ( endSign < 0 && startSign > 0 );
+
+	},
+
+	intersectsBox: function ( box ) {
+
+		return box.intersectsPlane( this );
+
+	},
+
+	intersectsSphere: function ( sphere ) {
+
+		return sphere.intersectsPlane( this );
+
+	},
+
+	coplanarPoint: function ( target ) {
+
+		if ( target === undefined ) {
+
+			console.warn( 'THREE.Plane: .coplanarPoint() target is now required' );
+			target = new _Vector3_js__WEBPACK_IMPORTED_MODULE_1__["Vector3"]();
+
+		}
+
+		return target.copy( this.normal ).multiplyScalar( - this.constant );
+
+	},
+
+	applyMatrix4: function ( matrix, optionalNormalMatrix ) {
+
+		var normalMatrix = optionalNormalMatrix || _normalMatrix.getNormalMatrix( matrix );
+
+		var referencePoint = this.coplanarPoint( _vector1 ).applyMatrix4( matrix );
+
+		var normal = this.normal.applyMatrix3( normalMatrix ).normalize();
+
+		this.constant = - referencePoint.dot( normal );
+
+		return this;
+
+	},
+
+	translate: function ( offset ) {
+
+		this.constant -= offset.dot( this.normal );
+
+		return this;
+
+	},
+
+	equals: function ( plane ) {
+
+		return plane.normal.equals( this.normal ) && ( plane.constant === this.constant );
+
+	}
+
+} );
+
+
+
+
+
+/***/ }),
+
 /***/ "./node_modules/three/src/math/Quaternion.js":
 /*!***************************************************!*\
   !*** ./node_modules/three/src/math/Quaternion.js ***!
@@ -22727,15 +24552,13 @@ Object.assign( Matrix4.prototype, {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Quaternion", function() { return Quaternion; });
-/* harmony import */ var _Math_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Math.js */ "./node_modules/three/src/math/Math.js");
-/* harmony import */ var _Vector3_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./Vector3.js */ "./node_modules/three/src/math/Vector3.js");
+/* harmony import */ var _MathUtils_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./MathUtils.js */ "./node_modules/three/src/math/MathUtils.js");
 /**
  * @author mikael emtinger / http://gomo.se/
  * @author alteredq / http://alteredqualia.com/
  * @author WestLangley / http://github.com/WestLangley
  * @author bhouston / http://clara.io
  */
-
 
 
 
@@ -22833,7 +24656,7 @@ Object.defineProperties( Quaternion.prototype, {
 		set: function ( value ) {
 
 			this._x = value;
-			this.onChangeCallback();
+			this._onChangeCallback();
 
 		}
 
@@ -22850,7 +24673,7 @@ Object.defineProperties( Quaternion.prototype, {
 		set: function ( value ) {
 
 			this._y = value;
-			this.onChangeCallback();
+			this._onChangeCallback();
 
 		}
 
@@ -22867,7 +24690,7 @@ Object.defineProperties( Quaternion.prototype, {
 		set: function ( value ) {
 
 			this._z = value;
-			this.onChangeCallback();
+			this._onChangeCallback();
 
 		}
 
@@ -22884,7 +24707,7 @@ Object.defineProperties( Quaternion.prototype, {
 		set: function ( value ) {
 
 			this._w = value;
-			this.onChangeCallback();
+			this._onChangeCallback();
 
 		}
 
@@ -22903,7 +24726,7 @@ Object.assign( Quaternion.prototype, {
 		this._z = z;
 		this._w = w;
 
-		this.onChangeCallback();
+		this._onChangeCallback();
 
 		return this;
 
@@ -22922,7 +24745,7 @@ Object.assign( Quaternion.prototype, {
 		this._z = quaternion.z;
 		this._w = quaternion.w;
 
-		this.onChangeCallback();
+		this._onChangeCallback();
 
 		return this;
 
@@ -22997,7 +24820,7 @@ Object.assign( Quaternion.prototype, {
 
 		}
 
-		if ( update !== false ) this.onChangeCallback();
+		if ( update !== false ) this._onChangeCallback();
 
 		return this;
 
@@ -23016,7 +24839,7 @@ Object.assign( Quaternion.prototype, {
 		this._z = axis.z * s;
 		this._w = Math.cos( halfAngle );
 
-		this.onChangeCallback();
+		this._onChangeCallback();
 
 		return this;
 
@@ -23075,61 +24898,58 @@ Object.assign( Quaternion.prototype, {
 
 		}
 
-		this.onChangeCallback();
+		this._onChangeCallback();
 
 		return this;
 
 	},
 
-	setFromUnitVectors: function () {
+	setFromUnitVectors: function ( vFrom, vTo ) {
 
 		// assumes direction vectors vFrom and vTo are normalized
 
-		var v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_1__["Vector3"]();
-		var r;
-
 		var EPS = 0.000001;
 
-		return function setFromUnitVectors( vFrom, vTo ) {
+		var r = vFrom.dot( vTo ) + 1;
 
-			if ( v1 === undefined ) v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_1__["Vector3"]();
+		if ( r < EPS ) {
 
-			r = vFrom.dot( vTo ) + 1;
+			r = 0;
 
-			if ( r < EPS ) {
+			if ( Math.abs( vFrom.x ) > Math.abs( vFrom.z ) ) {
 
-				r = 0;
-
-				if ( Math.abs( vFrom.x ) > Math.abs( vFrom.z ) ) {
-
-					v1.set( - vFrom.y, vFrom.x, 0 );
-
-				} else {
-
-					v1.set( 0, - vFrom.z, vFrom.y );
-
-				}
+				this._x = - vFrom.y;
+				this._y = vFrom.x;
+				this._z = 0;
+				this._w = r;
 
 			} else {
 
-				v1.crossVectors( vFrom, vTo );
+				this._x = 0;
+				this._y = - vFrom.z;
+				this._z = vFrom.y;
+				this._w = r;
 
 			}
 
-			this._x = v1.x;
-			this._y = v1.y;
-			this._z = v1.z;
+		} else {
+
+			// crossVectors( vFrom, vTo ); // inlined to avoid cyclic dependency on Vector3
+
+			this._x = vFrom.y * vTo.z - vFrom.z * vTo.y;
+			this._y = vFrom.z * vTo.x - vFrom.x * vTo.z;
+			this._z = vFrom.x * vTo.y - vFrom.y * vTo.x;
 			this._w = r;
 
-			return this.normalize();
+		}
 
-		};
+		return this.normalize();
 
-	}(),
+	},
 
 	angleTo: function ( q ) {
 
-		return 2 * Math.acos( Math.abs( _Math_js__WEBPACK_IMPORTED_MODULE_0__["_Math"].clamp( this.dot( q ), - 1, 1 ) ) );
+		return 2 * Math.acos( Math.abs( _MathUtils_js__WEBPACK_IMPORTED_MODULE_0__["MathUtils"].clamp( this.dot( q ), - 1, 1 ) ) );
 
 	},
 
@@ -23161,7 +24981,7 @@ Object.assign( Quaternion.prototype, {
 		this._y *= - 1;
 		this._z *= - 1;
 
-		this.onChangeCallback();
+		this._onChangeCallback();
 
 		return this;
 
@@ -23207,7 +25027,7 @@ Object.assign( Quaternion.prototype, {
 
 		}
 
-		this.onChangeCallback();
+		this._onChangeCallback();
 
 		return this;
 
@@ -23244,7 +25064,7 @@ Object.assign( Quaternion.prototype, {
 		this._z = qaz * qbw + qaw * qbz + qax * qby - qay * qbx;
 		this._w = qaw * qbw - qax * qbx - qay * qby - qaz * qbz;
 
-		this.onChangeCallback();
+		this._onChangeCallback();
 
 		return this;
 
@@ -23297,7 +25117,10 @@ Object.assign( Quaternion.prototype, {
 			this._y = s * y + t * this._y;
 			this._z = s * z + t * this._z;
 
-			return this.normalize();
+			this.normalize();
+			this._onChangeCallback();
+
+			return this;
 
 		}
 
@@ -23311,7 +25134,7 @@ Object.assign( Quaternion.prototype, {
 		this._y = ( y * ratioA + this._y * ratioB );
 		this._z = ( z * ratioA + this._z * ratioB );
 
-		this.onChangeCallback();
+		this._onChangeCallback();
 
 		return this;
 
@@ -23332,7 +25155,7 @@ Object.assign( Quaternion.prototype, {
 		this._z = array[ offset + 2 ];
 		this._w = array[ offset + 3 ];
 
-		this.onChangeCallback();
+		this._onChangeCallback();
 
 		return this;
 
@@ -23352,15 +25175,26 @@ Object.assign( Quaternion.prototype, {
 
 	},
 
-	onChange: function ( callback ) {
+	fromBufferAttribute: function ( attribute, index ) {
 
-		this.onChangeCallback = callback;
+		this._x = attribute.getX( index );
+		this._y = attribute.getY( index );
+		this._z = attribute.getZ( index );
+		this._w = attribute.getW( index );
 
 		return this;
 
 	},
 
-	onChangeCallback: function () {}
+	_onChange: function ( callback ) {
+
+		this._onChangeCallback = callback;
+
+		return this;
+
+	},
+
+	_onChangeCallback: function () {}
 
 } );
 
@@ -23383,6 +25217,15 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _Vector3_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Vector3.js */ "./node_modules/three/src/math/Vector3.js");
 
 
+var _vector = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _segCenter = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _segDir = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _diff = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+
+var _edge1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _edge2 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _normal = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+
 /**
  * @author bhouston / http://clara.io
  */
@@ -23390,7 +25233,7 @@ __webpack_require__.r(__webpack_exports__);
 function Ray( origin, direction ) {
 
 	this.origin = ( origin !== undefined ) ? origin : new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-	this.direction = ( direction !== undefined ) ? direction : new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+	this.direction = ( direction !== undefined ) ? direction : new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]( 0, 0, - 1 );
 
 }
 
@@ -23441,19 +25284,13 @@ Object.assign( Ray.prototype, {
 
 	},
 
-	recast: function () {
+	recast: function ( t ) {
 
-		var v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		this.origin.copy( this.at( t, _vector ) );
 
-		return function recast( t ) {
+		return this;
 
-			this.origin.copy( this.at( t, v1 ) );
-
-			return this;
-
-		};
-
-	}(),
+	},
 
 	closestPointToPoint: function ( point, target ) {
 
@@ -23484,94 +25321,72 @@ Object.assign( Ray.prototype, {
 
 	},
 
-	distanceSqToPoint: function () {
+	distanceSqToPoint: function ( point ) {
 
-		var v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		var directionDistance = _vector.subVectors( point, this.origin ).dot( this.direction );
 
-		return function distanceSqToPoint( point ) {
+		// point behind the ray
 
-			var directionDistance = v1.subVectors( point, this.origin ).dot( this.direction );
+		if ( directionDistance < 0 ) {
 
-			// point behind the ray
+			return this.origin.distanceToSquared( point );
 
-			if ( directionDistance < 0 ) {
+		}
 
-				return this.origin.distanceToSquared( point );
+		_vector.copy( this.direction ).multiplyScalar( directionDistance ).add( this.origin );
 
-			}
+		return _vector.distanceToSquared( point );
 
-			v1.copy( this.direction ).multiplyScalar( directionDistance ).add( this.origin );
+	},
 
-			return v1.distanceToSquared( point );
+	distanceSqToSegment: function ( v0, v1, optionalPointOnRay, optionalPointOnSegment ) {
 
-		};
+		// from http://www.geometrictools.com/GTEngine/Include/Mathematics/GteDistRaySegment.h
+		// It returns the min distance between the ray and the segment
+		// defined by v0 and v1
+		// It can also set two optional targets :
+		// - The closest point on the ray
+		// - The closest point on the segment
 
-	}(),
+		_segCenter.copy( v0 ).add( v1 ).multiplyScalar( 0.5 );
+		_segDir.copy( v1 ).sub( v0 ).normalize();
+		_diff.copy( this.origin ).sub( _segCenter );
 
-	distanceSqToSegment: function () {
+		var segExtent = v0.distanceTo( v1 ) * 0.5;
+		var a01 = - this.direction.dot( _segDir );
+		var b0 = _diff.dot( this.direction );
+		var b1 = - _diff.dot( _segDir );
+		var c = _diff.lengthSq();
+		var det = Math.abs( 1 - a01 * a01 );
+		var s0, s1, sqrDist, extDet;
 
-		var segCenter = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var segDir = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var diff = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		if ( det > 0 ) {
 
-		return function distanceSqToSegment( v0, v1, optionalPointOnRay, optionalPointOnSegment ) {
+			// The ray and segment are not parallel.
 
-			// from http://www.geometrictools.com/GTEngine/Include/Mathematics/GteDistRaySegment.h
-			// It returns the min distance between the ray and the segment
-			// defined by v0 and v1
-			// It can also set two optional targets :
-			// - The closest point on the ray
-			// - The closest point on the segment
+			s0 = a01 * b1 - b0;
+			s1 = a01 * b0 - b1;
+			extDet = segExtent * det;
 
-			segCenter.copy( v0 ).add( v1 ).multiplyScalar( 0.5 );
-			segDir.copy( v1 ).sub( v0 ).normalize();
-			diff.copy( this.origin ).sub( segCenter );
+			if ( s0 >= 0 ) {
 
-			var segExtent = v0.distanceTo( v1 ) * 0.5;
-			var a01 = - this.direction.dot( segDir );
-			var b0 = diff.dot( this.direction );
-			var b1 = - diff.dot( segDir );
-			var c = diff.lengthSq();
-			var det = Math.abs( 1 - a01 * a01 );
-			var s0, s1, sqrDist, extDet;
+				if ( s1 >= - extDet ) {
 
-			if ( det > 0 ) {
+					if ( s1 <= extDet ) {
 
-				// The ray and segment are not parallel.
+						// region 0
+						// Minimum at interior points of ray and segment.
 
-				s0 = a01 * b1 - b0;
-				s1 = a01 * b0 - b1;
-				extDet = segExtent * det;
-
-				if ( s0 >= 0 ) {
-
-					if ( s1 >= - extDet ) {
-
-						if ( s1 <= extDet ) {
-
-							// region 0
-							// Minimum at interior points of ray and segment.
-
-							var invDet = 1 / det;
-							s0 *= invDet;
-							s1 *= invDet;
-							sqrDist = s0 * ( s0 + a01 * s1 + 2 * b0 ) + s1 * ( a01 * s0 + s1 + 2 * b1 ) + c;
-
-						} else {
-
-							// region 1
-
-							s1 = segExtent;
-							s0 = Math.max( 0, - ( a01 * s1 + b0 ) );
-							sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
-
-						}
+						var invDet = 1 / det;
+						s0 *= invDet;
+						s1 *= invDet;
+						sqrDist = s0 * ( s0 + a01 * s1 + 2 * b0 ) + s1 * ( a01 * s0 + s1 + 2 * b1 ) + c;
 
 					} else {
 
-						// region 5
+						// region 1
 
-						s1 = - segExtent;
+						s1 = segExtent;
 						s0 = Math.max( 0, - ( a01 * s1 + b0 ) );
 						sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
 
@@ -23579,97 +25394,99 @@ Object.assign( Ray.prototype, {
 
 				} else {
 
-					if ( s1 <= - extDet ) {
+					// region 5
 
-						// region 4
-
-						s0 = Math.max( 0, - ( - a01 * segExtent + b0 ) );
-						s1 = ( s0 > 0 ) ? - segExtent : Math.min( Math.max( - segExtent, - b1 ), segExtent );
-						sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
-
-					} else if ( s1 <= extDet ) {
-
-						// region 3
-
-						s0 = 0;
-						s1 = Math.min( Math.max( - segExtent, - b1 ), segExtent );
-						sqrDist = s1 * ( s1 + 2 * b1 ) + c;
-
-					} else {
-
-						// region 2
-
-						s0 = Math.max( 0, - ( a01 * segExtent + b0 ) );
-						s1 = ( s0 > 0 ) ? segExtent : Math.min( Math.max( - segExtent, - b1 ), segExtent );
-						sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
-
-					}
+					s1 = - segExtent;
+					s0 = Math.max( 0, - ( a01 * s1 + b0 ) );
+					sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
 
 				}
 
 			} else {
 
-				// Ray and segment are parallel.
+				if ( s1 <= - extDet ) {
 
-				s1 = ( a01 > 0 ) ? - segExtent : segExtent;
-				s0 = Math.max( 0, - ( a01 * s1 + b0 ) );
-				sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
+					// region 4
+
+					s0 = Math.max( 0, - ( - a01 * segExtent + b0 ) );
+					s1 = ( s0 > 0 ) ? - segExtent : Math.min( Math.max( - segExtent, - b1 ), segExtent );
+					sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
+
+				} else if ( s1 <= extDet ) {
+
+					// region 3
+
+					s0 = 0;
+					s1 = Math.min( Math.max( - segExtent, - b1 ), segExtent );
+					sqrDist = s1 * ( s1 + 2 * b1 ) + c;
+
+				} else {
+
+					// region 2
+
+					s0 = Math.max( 0, - ( a01 * segExtent + b0 ) );
+					s1 = ( s0 > 0 ) ? segExtent : Math.min( Math.max( - segExtent, - b1 ), segExtent );
+					sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
+
+				}
 
 			}
 
-			if ( optionalPointOnRay ) {
+		} else {
 
-				optionalPointOnRay.copy( this.direction ).multiplyScalar( s0 ).add( this.origin );
+			// Ray and segment are parallel.
 
-			}
+			s1 = ( a01 > 0 ) ? - segExtent : segExtent;
+			s0 = Math.max( 0, - ( a01 * s1 + b0 ) );
+			sqrDist = - s0 * s0 + s1 * ( s1 + 2 * b1 ) + c;
 
-			if ( optionalPointOnSegment ) {
+		}
 
-				optionalPointOnSegment.copy( segDir ).multiplyScalar( s1 ).add( segCenter );
+		if ( optionalPointOnRay ) {
 
-			}
+			optionalPointOnRay.copy( this.direction ).multiplyScalar( s0 ).add( this.origin );
 
-			return sqrDist;
+		}
 
-		};
+		if ( optionalPointOnSegment ) {
 
-	}(),
+			optionalPointOnSegment.copy( _segDir ).multiplyScalar( s1 ).add( _segCenter );
 
-	intersectSphere: function () {
+		}
 
-		var v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		return sqrDist;
 
-		return function intersectSphere( sphere, target ) {
+	},
 
-			v1.subVectors( sphere.center, this.origin );
-			var tca = v1.dot( this.direction );
-			var d2 = v1.dot( v1 ) - tca * tca;
-			var radius2 = sphere.radius * sphere.radius;
+	intersectSphere: function ( sphere, target ) {
 
-			if ( d2 > radius2 ) return null;
+		_vector.subVectors( sphere.center, this.origin );
+		var tca = _vector.dot( this.direction );
+		var d2 = _vector.dot( _vector ) - tca * tca;
+		var radius2 = sphere.radius * sphere.radius;
 
-			var thc = Math.sqrt( radius2 - d2 );
+		if ( d2 > radius2 ) return null;
 
-			// t0 = first intersect point - entrance on front of sphere
-			var t0 = tca - thc;
+		var thc = Math.sqrt( radius2 - d2 );
 
-			// t1 = second intersect point - exit point on back of sphere
-			var t1 = tca + thc;
+		// t0 = first intersect point - entrance on front of sphere
+		var t0 = tca - thc;
 
-			// test to see if both t0 and t1 are behind the ray - if so, return null
-			if ( t0 < 0 && t1 < 0 ) return null;
+		// t1 = second intersect point - exit point on back of sphere
+		var t1 = tca + thc;
 
-			// test to see if t0 is behind the ray:
-			// if it is, the ray is inside the sphere, so return the second exit point scaled by t1,
-			// in order to always return an intersect point that is in front of the ray.
-			if ( t0 < 0 ) return this.at( t1, target );
+		// test to see if both t0 and t1 are behind the ray - if so, return null
+		if ( t0 < 0 && t1 < 0 ) return null;
 
-			// else t0 is in front of the ray, so return the first collision point scaled by t0
-			return this.at( t0, target );
+		// test to see if t0 is behind the ray:
+		// if it is, the ray is inside the sphere, so return the second exit point scaled by t1,
+		// in order to always return an intersect point that is in front of the ray.
+		if ( t0 < 0 ) return this.at( t1, target );
 
-		};
+		// else t0 is in front of the ray, so return the first collision point scaled by t0
+		return this.at( t0, target );
 
-	}(),
+	},
 
 	intersectsSphere: function ( sphere ) {
 
@@ -23813,100 +25630,86 @@ Object.assign( Ray.prototype, {
 
 	},
 
-	intersectsBox: ( function () {
+	intersectsBox: function ( box ) {
 
-		var v = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		return this.intersectBox( box, _vector ) !== null;
 
-		return function intersectsBox( box ) {
+	},
 
-			return this.intersectBox( box, v ) !== null;
-
-		};
-
-	} )(),
-
-	intersectTriangle: function () {
+	intersectTriangle: function ( a, b, c, backfaceCulling, target ) {
 
 		// Compute the offset origin, edges, and normal.
-		var diff = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var edge1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var edge2 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var normal = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
 
-		return function intersectTriangle( a, b, c, backfaceCulling, target ) {
+		// from http://www.geometrictools.com/GTEngine/Include/Mathematics/GteIntrRay3Triangle3.h
 
-			// from http://www.geometrictools.com/GTEngine/Include/Mathematics/GteIntrRay3Triangle3.h
+		_edge1.subVectors( b, a );
+		_edge2.subVectors( c, a );
+		_normal.crossVectors( _edge1, _edge2 );
 
-			edge1.subVectors( b, a );
-			edge2.subVectors( c, a );
-			normal.crossVectors( edge1, edge2 );
+		// Solve Q + t*D = b1*E1 + b2*E2 (Q = kDiff, D = ray direction,
+		// E1 = kEdge1, E2 = kEdge2, N = Cross(E1,E2)) by
+		//   |Dot(D,N)|*b1 = sign(Dot(D,N))*Dot(D,Cross(Q,E2))
+		//   |Dot(D,N)|*b2 = sign(Dot(D,N))*Dot(D,Cross(E1,Q))
+		//   |Dot(D,N)|*t = -sign(Dot(D,N))*Dot(Q,N)
+		var DdN = this.direction.dot( _normal );
+		var sign;
 
-			// Solve Q + t*D = b1*E1 + b2*E2 (Q = kDiff, D = ray direction,
-			// E1 = kEdge1, E2 = kEdge2, N = Cross(E1,E2)) by
-			//   |Dot(D,N)|*b1 = sign(Dot(D,N))*Dot(D,Cross(Q,E2))
-			//   |Dot(D,N)|*b2 = sign(Dot(D,N))*Dot(D,Cross(E1,Q))
-			//   |Dot(D,N)|*t = -sign(Dot(D,N))*Dot(Q,N)
-			var DdN = this.direction.dot( normal );
-			var sign;
+		if ( DdN > 0 ) {
 
-			if ( DdN > 0 ) {
+			if ( backfaceCulling ) return null;
+			sign = 1;
 
-				if ( backfaceCulling ) return null;
-				sign = 1;
+		} else if ( DdN < 0 ) {
 
-			} else if ( DdN < 0 ) {
+			sign = - 1;
+			DdN = - DdN;
 
-				sign = - 1;
-				DdN = - DdN;
+		} else {
 
-			} else {
+			return null;
 
-				return null;
+		}
 
-			}
+		_diff.subVectors( this.origin, a );
+		var DdQxE2 = sign * this.direction.dot( _edge2.crossVectors( _diff, _edge2 ) );
 
-			diff.subVectors( this.origin, a );
-			var DdQxE2 = sign * this.direction.dot( edge2.crossVectors( diff, edge2 ) );
+		// b1 < 0, no intersection
+		if ( DdQxE2 < 0 ) {
 
-			// b1 < 0, no intersection
-			if ( DdQxE2 < 0 ) {
+			return null;
 
-				return null;
+		}
 
-			}
+		var DdE1xQ = sign * this.direction.dot( _edge1.cross( _diff ) );
 
-			var DdE1xQ = sign * this.direction.dot( edge1.cross( diff ) );
+		// b2 < 0, no intersection
+		if ( DdE1xQ < 0 ) {
 
-			// b2 < 0, no intersection
-			if ( DdE1xQ < 0 ) {
+			return null;
 
-				return null;
+		}
 
-			}
+		// b1+b2 > 1, no intersection
+		if ( DdQxE2 + DdE1xQ > DdN ) {
 
-			// b1+b2 > 1, no intersection
-			if ( DdQxE2 + DdE1xQ > DdN ) {
+			return null;
 
-				return null;
+		}
 
-			}
+		// Line intersects triangle, check if ray does.
+		var QdN = - sign * _diff.dot( _normal );
 
-			// Line intersects triangle, check if ray does.
-			var QdN = - sign * diff.dot( normal );
+		// t < 0, no intersection
+		if ( QdN < 0 ) {
 
-			// t < 0, no intersection
-			if ( QdN < 0 ) {
+			return null;
 
-				return null;
+		}
 
-			}
+		// Ray intersects triangle.
+		return this.at( QdN / DdN, target );
 
-			// Ray intersects triangle.
-			return this.at( QdN / DdN, target );
-
-		};
-
-	}(),
+	},
 
 	applyMatrix4: function ( matrix4 ) {
 
@@ -23931,202 +25734,6 @@ Object.assign( Ray.prototype, {
 
 /***/ }),
 
-/***/ "./node_modules/three/src/math/Sphere.js":
-/*!***********************************************!*\
-  !*** ./node_modules/three/src/math/Sphere.js ***!
-  \***********************************************/
-/*! exports provided: Sphere */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Sphere", function() { return Sphere; });
-/* harmony import */ var _Box3_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Box3.js */ "./node_modules/three/src/math/Box3.js");
-/* harmony import */ var _Vector3_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./Vector3.js */ "./node_modules/three/src/math/Vector3.js");
-
-
-
-/**
- * @author bhouston / http://clara.io
- * @author mrdoob / http://mrdoob.com/
- */
-
-function Sphere( center, radius ) {
-
-	this.center = ( center !== undefined ) ? center : new _Vector3_js__WEBPACK_IMPORTED_MODULE_1__["Vector3"]();
-	this.radius = ( radius !== undefined ) ? radius : 0;
-
-}
-
-Object.assign( Sphere.prototype, {
-
-	set: function ( center, radius ) {
-
-		this.center.copy( center );
-		this.radius = radius;
-
-		return this;
-
-	},
-
-	setFromPoints: function () {
-
-		var box = new _Box3_js__WEBPACK_IMPORTED_MODULE_0__["Box3"]();
-
-		return function setFromPoints( points, optionalCenter ) {
-
-			var center = this.center;
-
-			if ( optionalCenter !== undefined ) {
-
-				center.copy( optionalCenter );
-
-			} else {
-
-				box.setFromPoints( points ).getCenter( center );
-
-			}
-
-			var maxRadiusSq = 0;
-
-			for ( var i = 0, il = points.length; i < il; i ++ ) {
-
-				maxRadiusSq = Math.max( maxRadiusSq, center.distanceToSquared( points[ i ] ) );
-
-			}
-
-			this.radius = Math.sqrt( maxRadiusSq );
-
-			return this;
-
-		};
-
-	}(),
-
-	clone: function () {
-
-		return new this.constructor().copy( this );
-
-	},
-
-	copy: function ( sphere ) {
-
-		this.center.copy( sphere.center );
-		this.radius = sphere.radius;
-
-		return this;
-
-	},
-
-	empty: function () {
-
-		return ( this.radius <= 0 );
-
-	},
-
-	containsPoint: function ( point ) {
-
-		return ( point.distanceToSquared( this.center ) <= ( this.radius * this.radius ) );
-
-	},
-
-	distanceToPoint: function ( point ) {
-
-		return ( point.distanceTo( this.center ) - this.radius );
-
-	},
-
-	intersectsSphere: function ( sphere ) {
-
-		var radiusSum = this.radius + sphere.radius;
-
-		return sphere.center.distanceToSquared( this.center ) <= ( radiusSum * radiusSum );
-
-	},
-
-	intersectsBox: function ( box ) {
-
-		return box.intersectsSphere( this );
-
-	},
-
-	intersectsPlane: function ( plane ) {
-
-		return Math.abs( plane.distanceToPoint( this.center ) ) <= this.radius;
-
-	},
-
-	clampPoint: function ( point, target ) {
-
-		var deltaLengthSq = this.center.distanceToSquared( point );
-
-		if ( target === undefined ) {
-
-			console.warn( 'THREE.Sphere: .clampPoint() target is now required' );
-			target = new _Vector3_js__WEBPACK_IMPORTED_MODULE_1__["Vector3"]();
-
-		}
-
-		target.copy( point );
-
-		if ( deltaLengthSq > ( this.radius * this.radius ) ) {
-
-			target.sub( this.center ).normalize();
-			target.multiplyScalar( this.radius ).add( this.center );
-
-		}
-
-		return target;
-
-	},
-
-	getBoundingBox: function ( target ) {
-
-		if ( target === undefined ) {
-
-			console.warn( 'THREE.Sphere: .getBoundingBox() target is now required' );
-			target = new _Box3_js__WEBPACK_IMPORTED_MODULE_0__["Box3"]();
-
-		}
-
-		target.set( this.center, this.center );
-		target.expandByScalar( this.radius );
-
-		return target;
-
-	},
-
-	applyMatrix4: function ( matrix ) {
-
-		this.center.applyMatrix4( matrix );
-		this.radius = this.radius * matrix.getMaxScaleOnAxis();
-
-		return this;
-
-	},
-
-	translate: function ( offset ) {
-
-		this.center.add( offset );
-
-		return this;
-
-	},
-
-	equals: function ( sphere ) {
-
-		return sphere.center.equals( this.center ) && ( sphere.radius === this.radius );
-
-	}
-
-} );
-
-
-
-
-
-/***/ }),
-
 /***/ "./node_modules/three/src/math/Triangle.js":
 /*!*************************************************!*\
   !*** ./node_modules/three/src/math/Triangle.js ***!
@@ -24138,12 +25745,26 @@ Object.assign( Sphere.prototype, {
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Triangle", function() { return Triangle; });
 /* harmony import */ var _Vector3_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Vector3.js */ "./node_modules/three/src/math/Vector3.js");
+/* harmony import */ var _Plane_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./Plane.js */ "./node_modules/three/src/math/Plane.js");
+
 
 
 /**
  * @author bhouston / http://clara.io
  * @author mrdoob / http://mrdoob.com/
  */
+
+var _v0 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _v2 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _v3 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+
+var _vab = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _vac = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _vbc = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _vap = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _vbp = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+var _vcp = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
 
 function Triangle( a, b, c ) {
 
@@ -24155,117 +25776,101 @@ function Triangle( a, b, c ) {
 
 Object.assign( Triangle, {
 
-	getNormal: function () {
+	getNormal: function ( a, b, c, target ) {
 
-		var v0 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		if ( target === undefined ) {
 
-		return function getNormal( a, b, c, target ) {
+			console.warn( 'THREE.Triangle: .getNormal() target is now required' );
+			target = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
 
-			if ( target === undefined ) {
+		}
 
-				console.warn( 'THREE.Triangle: .getNormal() target is now required' );
-				target = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		target.subVectors( c, b );
+		_v0.subVectors( a, b );
+		target.cross( _v0 );
 
-			}
+		var targetLengthSq = target.lengthSq();
+		if ( targetLengthSq > 0 ) {
 
-			target.subVectors( c, b );
-			v0.subVectors( a, b );
-			target.cross( v0 );
+			return target.multiplyScalar( 1 / Math.sqrt( targetLengthSq ) );
 
-			var targetLengthSq = target.lengthSq();
-			if ( targetLengthSq > 0 ) {
+		}
 
-				return target.multiplyScalar( 1 / Math.sqrt( targetLengthSq ) );
+		return target.set( 0, 0, 0 );
 
-			}
-
-			return target.set( 0, 0, 0 );
-
-		};
-
-	}(),
+	},
 
 	// static/instance method to calculate barycentric coordinates
 	// based on: http://www.blackpawn.com/texts/pointinpoly/default.html
-	getBarycoord: function () {
+	getBarycoord: function ( point, a, b, c, target ) {
 
-		var v0 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var v2 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		_v0.subVectors( c, a );
+		_v1.subVectors( b, a );
+		_v2.subVectors( point, a );
 
-		return function getBarycoord( point, a, b, c, target ) {
+		var dot00 = _v0.dot( _v0 );
+		var dot01 = _v0.dot( _v1 );
+		var dot02 = _v0.dot( _v2 );
+		var dot11 = _v1.dot( _v1 );
+		var dot12 = _v1.dot( _v2 );
 
-			v0.subVectors( c, a );
-			v1.subVectors( b, a );
-			v2.subVectors( point, a );
+		var denom = ( dot00 * dot11 - dot01 * dot01 );
 
-			var dot00 = v0.dot( v0 );
-			var dot01 = v0.dot( v1 );
-			var dot02 = v0.dot( v2 );
-			var dot11 = v1.dot( v1 );
-			var dot12 = v1.dot( v2 );
+		if ( target === undefined ) {
 
-			var denom = ( dot00 * dot11 - dot01 * dot01 );
+			console.warn( 'THREE.Triangle: .getBarycoord() target is now required' );
+			target = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
 
-			if ( target === undefined ) {
+		}
 
-				console.warn( 'THREE.Triangle: .getBarycoord() target is now required' );
-				target = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		// collinear or singular triangle
+		if ( denom === 0 ) {
 
-			}
+			// arbitrary location outside of triangle?
+			// not sure if this is the best idea, maybe should be returning undefined
+			return target.set( - 2, - 1, - 1 );
 
-			// collinear or singular triangle
-			if ( denom === 0 ) {
+		}
 
-				// arbitrary location outside of triangle?
-				// not sure if this is the best idea, maybe should be returning undefined
-				return target.set( - 2, - 1, - 1 );
+		var invDenom = 1 / denom;
+		var u = ( dot11 * dot02 - dot01 * dot12 ) * invDenom;
+		var v = ( dot00 * dot12 - dot01 * dot02 ) * invDenom;
 
-			}
+		// barycentric coordinates must always sum to 1
+		return target.set( 1 - u - v, v, u );
 
-			var invDenom = 1 / denom;
-			var u = ( dot11 * dot02 - dot01 * dot12 ) * invDenom;
-			var v = ( dot00 * dot12 - dot01 * dot02 ) * invDenom;
+	},
 
-			// barycentric coordinates must always sum to 1
-			return target.set( 1 - u - v, v, u );
+	containsPoint: function ( point, a, b, c ) {
 
-		};
+		Triangle.getBarycoord( point, a, b, c, _v3 );
 
-	}(),
+		return ( _v3.x >= 0 ) && ( _v3.y >= 0 ) && ( ( _v3.x + _v3.y ) <= 1 );
 
-	containsPoint: function () {
+	},
 
-		var v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+	getUV: function ( point, p1, p2, p3, uv1, uv2, uv3, target ) {
 
-		return function containsPoint( point, a, b, c ) {
+		this.getBarycoord( point, p1, p2, p3, _v3 );
 
-			Triangle.getBarycoord( point, a, b, c, v1 );
+		target.set( 0, 0 );
+		target.addScaledVector( uv1, _v3.x );
+		target.addScaledVector( uv2, _v3.y );
+		target.addScaledVector( uv3, _v3.z );
 
-			return ( v1.x >= 0 ) && ( v1.y >= 0 ) && ( ( v1.x + v1.y ) <= 1 );
+		return target;
 
-		};
+	},
 
-	}(),
+	isFrontFacing: function ( a, b, c, direction ) {
 
-	getUV: function () {
+		_v0.subVectors( c, b );
+		_v1.subVectors( a, b );
 
-		var barycoord = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		// strictly front facing
+		return ( _v0.cross( _v1 ).dot( direction ) < 0 ) ? true : false;
 
-		return function getUV( point, p1, p2, p3, uv1, uv2, uv3, target ) {
-
-			this.getBarycoord( point, p1, p2, p3, barycoord );
-
-			target.set( 0, 0 );
-			target.addScaledVector( uv1, barycoord.x );
-			target.addScaledVector( uv2, barycoord.y );
-			target.addScaledVector( uv3, barycoord.z );
-
-			return target;
-
-		};
-
-	}()
+	}
 
 } );
 
@@ -24309,19 +25914,12 @@ Object.assign( Triangle.prototype, {
 
 	getArea: function () {
 
-		var v0 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var v1 = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		_v0.subVectors( this.c, this.b );
+		_v1.subVectors( this.a, this.b );
 
-		return function getArea() {
+		return _v0.cross( _v1 ).length() * 0.5;
 
-			v0.subVectors( this.c, this.b );
-			v1.subVectors( this.a, this.b );
-
-			return v0.cross( v1 ).length() * 0.5;
-
-		};
-
-	}(),
+	},
 
 	getMidpoint: function ( target ) {
 
@@ -24347,7 +25945,7 @@ Object.assign( Triangle.prototype, {
 		if ( target === undefined ) {
 
 			console.warn( 'THREE.Triangle: .getPlane() target is now required' );
-			target = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+			target = new _Plane_js__WEBPACK_IMPORTED_MODULE_1__["Plane"]();
 
 		}
 
@@ -24361,15 +25959,21 @@ Object.assign( Triangle.prototype, {
 
 	},
 
+	getUV: function ( point, uv1, uv2, uv3, target ) {
+
+		return Triangle.getUV( point, this.a, this.b, this.c, uv1, uv2, uv3, target );
+
+	},
+
 	containsPoint: function ( point ) {
 
 		return Triangle.containsPoint( point, this.a, this.b, this.c );
 
 	},
 
-	getUV: function ( point, uv1, uv2, uv3, result ) {
+	isFrontFacing: function ( direction ) {
 
-		return Triangle.getUV( point, this.a, this.b, this.c, uv1, uv2, uv3, result );
+		return Triangle.isFrontFacing( this.a, this.b, this.c, direction );
 
 	},
 
@@ -24379,103 +25983,93 @@ Object.assign( Triangle.prototype, {
 
 	},
 
-	closestPointToPoint: function () {
+	closestPointToPoint: function ( p, target ) {
 
-		var vab = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var vac = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var vbc = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var vap = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var vbp = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
-		var vcp = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		if ( target === undefined ) {
 
-		return function closestPointToPoint( p, target ) {
+			console.warn( 'THREE.Triangle: .closestPointToPoint() target is now required' );
+			target = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
 
-			if ( target === undefined ) {
+		}
 
-				console.warn( 'THREE.Triangle: .closestPointToPoint() target is now required' );
-				target = new _Vector3_js__WEBPACK_IMPORTED_MODULE_0__["Vector3"]();
+		var a = this.a, b = this.b, c = this.c;
+		var v, w;
 
-			}
+		// algorithm thanks to Real-Time Collision Detection by Christer Ericson,
+		// published by Morgan Kaufmann Publishers, (c) 2005 Elsevier Inc.,
+		// under the accompanying license; see chapter 5.1.5 for detailed explanation.
+		// basically, we're distinguishing which of the voronoi regions of the triangle
+		// the point lies in with the minimum amount of redundant computation.
 
-			var a = this.a, b = this.b, c = this.c;
-			var v, w;
+		_vab.subVectors( b, a );
+		_vac.subVectors( c, a );
+		_vap.subVectors( p, a );
+		var d1 = _vab.dot( _vap );
+		var d2 = _vac.dot( _vap );
+		if ( d1 <= 0 && d2 <= 0 ) {
 
-			// algorithm thanks to Real-Time Collision Detection by Christer Ericson,
-			// published by Morgan Kaufmann Publishers, (c) 2005 Elsevier Inc.,
-			// under the accompanying license; see chapter 5.1.5 for detailed explanation.
-			// basically, we're distinguishing which of the voronoi regions of the triangle
-			// the point lies in with the minimum amount of redundant computation.
+			// vertex region of A; barycentric coords (1, 0, 0)
+			return target.copy( a );
 
-			vab.subVectors( b, a );
-			vac.subVectors( c, a );
-			vap.subVectors( p, a );
-			var d1 = vab.dot( vap );
-			var d2 = vac.dot( vap );
-			if ( d1 <= 0 && d2 <= 0 ) {
+		}
 
-				// vertex region of A; barycentric coords (1, 0, 0)
-				return target.copy( a );
+		_vbp.subVectors( p, b );
+		var d3 = _vab.dot( _vbp );
+		var d4 = _vac.dot( _vbp );
+		if ( d3 >= 0 && d4 <= d3 ) {
 
-			}
+			// vertex region of B; barycentric coords (0, 1, 0)
+			return target.copy( b );
 
-			vbp.subVectors( p, b );
-			var d3 = vab.dot( vbp );
-			var d4 = vac.dot( vbp );
-			if ( d3 >= 0 && d4 <= d3 ) {
+		}
 
-				// vertex region of B; barycentric coords (0, 1, 0)
-				return target.copy( b );
+		var vc = d1 * d4 - d3 * d2;
+		if ( vc <= 0 && d1 >= 0 && d3 <= 0 ) {
 
-			}
+			v = d1 / ( d1 - d3 );
+			// edge region of AB; barycentric coords (1-v, v, 0)
+			return target.copy( a ).addScaledVector( _vab, v );
 
-			var vc = d1 * d4 - d3 * d2;
-			if ( vc <= 0 && d1 >= 0 && d3 <= 0 ) {
+		}
 
-				v = d1 / ( d1 - d3 );
-				// edge region of AB; barycentric coords (1-v, v, 0)
-				return target.copy( a ).addScaledVector( vab, v );
+		_vcp.subVectors( p, c );
+		var d5 = _vab.dot( _vcp );
+		var d6 = _vac.dot( _vcp );
+		if ( d6 >= 0 && d5 <= d6 ) {
 
-			}
+			// vertex region of C; barycentric coords (0, 0, 1)
+			return target.copy( c );
 
-			vcp.subVectors( p, c );
-			var d5 = vab.dot( vcp );
-			var d6 = vac.dot( vcp );
-			if ( d6 >= 0 && d5 <= d6 ) {
+		}
 
-				// vertex region of C; barycentric coords (0, 0, 1)
-				return target.copy( c );
+		var vb = d5 * d2 - d1 * d6;
+		if ( vb <= 0 && d2 >= 0 && d6 <= 0 ) {
 
-			}
+			w = d2 / ( d2 - d6 );
+			// edge region of AC; barycentric coords (1-w, 0, w)
+			return target.copy( a ).addScaledVector( _vac, w );
 
-			var vb = d5 * d2 - d1 * d6;
-			if ( vb <= 0 && d2 >= 0 && d6 <= 0 ) {
+		}
 
-				w = d2 / ( d2 - d6 );
-				// edge region of AC; barycentric coords (1-w, 0, w)
-				return target.copy( a ).addScaledVector( vac, w );
+		var va = d3 * d6 - d5 * d4;
+		if ( va <= 0 && ( d4 - d3 ) >= 0 && ( d5 - d6 ) >= 0 ) {
 
-			}
+			_vbc.subVectors( c, b );
+			w = ( d4 - d3 ) / ( ( d4 - d3 ) + ( d5 - d6 ) );
+			// edge region of BC; barycentric coords (0, 1-w, w)
+			return target.copy( b ).addScaledVector( _vbc, w ); // edge region of BC
 
-			var va = d3 * d6 - d5 * d4;
-			if ( va <= 0 && ( d4 - d3 ) >= 0 && ( d5 - d6 ) >= 0 ) {
+		}
 
-				vbc.subVectors( c, b );
-				w = ( d4 - d3 ) / ( ( d4 - d3 ) + ( d5 - d6 ) );
-				// edge region of BC; barycentric coords (0, 1-w, w)
-				return target.copy( b ).addScaledVector( vbc, w ); // edge region of BC
+		// face region
+		var denom = 1 / ( va + vb + vc );
+		// u = va * denom
+		v = vb * denom;
+		w = vc * denom;
 
-			}
+		return target.copy( a ).addScaledVector( _vab, v ).addScaledVector( _vac, w );
 
-			// face region
-			var denom = 1 / ( va + vb + vc );
-			// u = va * denom
-			v = vb * denom;
-			w = vc * denom;
-			return target.copy( a ).addScaledVector( vab, v ).addScaledVector( vac, w );
-
-		};
-
-	}(),
+	},
 
 	equals: function ( triangle ) {
 
@@ -24781,21 +26375,14 @@ Object.assign( Vector2.prototype, {
 
 	},
 
-	clampScalar: function () {
+	clampScalar: function ( minVal, maxVal ) {
 
-		var min = new Vector2();
-		var max = new Vector2();
+		this.x = Math.max( minVal, Math.min( maxVal, this.x ) );
+		this.y = Math.max( minVal, Math.min( maxVal, this.y ) );
 
-		return function clampScalar( minVal, maxVal ) {
+		return this;
 
-			min.set( minVal, minVal );
-			max.set( maxVal, maxVal );
-
-			return this.clamp( min, max );
-
-		};
-
-	}(),
+	},
 
 	clampLength: function ( min, max ) {
 
@@ -24890,9 +26477,7 @@ Object.assign( Vector2.prototype, {
 
 		// computes the angle in radians with respect to the positive x-axis
 
-		var angle = Math.atan2( this.y, this.x );
-
-		if ( angle < 0 ) angle += 2 * Math.PI;
+		var angle = Math.atan2( - this.y, - this.x ) + Math.PI;
 
 		return angle;
 
@@ -25014,10 +26599,8 @@ Object.assign( Vector2.prototype, {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "Vector3", function() { return Vector3; });
-/* harmony import */ var _Math_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./Math.js */ "./node_modules/three/src/math/Math.js");
-/* harmony import */ var _Matrix4_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./Matrix4.js */ "./node_modules/three/src/math/Matrix4.js");
-/* harmony import */ var _Quaternion_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./Quaternion.js */ "./node_modules/three/src/math/Quaternion.js");
-
+/* harmony import */ var _MathUtils_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./MathUtils.js */ "./node_modules/three/src/math/MathUtils.js");
+/* harmony import */ var _Quaternion_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./Quaternion.js */ "./node_modules/three/src/math/Quaternion.js");
 
 
 
@@ -25029,6 +26612,9 @@ __webpack_require__.r(__webpack_exports__);
  * @author egraether / http://egraether.com/
  * @author WestLangley / http://github.com/WestLangley
  */
+
+var _vector = new Vector3();
+var _quaternion = new _Quaternion_js__WEBPACK_IMPORTED_MODULE_1__["Quaternion"]();
 
 function Vector3( x, y, z ) {
 
@@ -25251,35 +26837,23 @@ Object.assign( Vector3.prototype, {
 
 	},
 
-	applyEuler: function () {
+	applyEuler: function ( euler ) {
 
-		var quaternion = new _Quaternion_js__WEBPACK_IMPORTED_MODULE_2__["Quaternion"]();
+		if ( ! ( euler && euler.isEuler ) ) {
 
-		return function applyEuler( euler ) {
+			console.error( 'THREE.Vector3: .applyEuler() now expects an Euler rotation rather than a Vector3 and order.' );
 
-			if ( ! ( euler && euler.isEuler ) ) {
+		}
 
-				console.error( 'THREE.Vector3: .applyEuler() now expects an Euler rotation rather than a Vector3 and order.' );
+		return this.applyQuaternion( _quaternion.setFromEuler( euler ) );
 
-			}
+	},
 
-			return this.applyQuaternion( quaternion.setFromEuler( euler ) );
+	applyAxisAngle: function ( axis, angle ) {
 
-		};
+		return this.applyQuaternion( _quaternion.setFromAxisAngle( axis, angle ) );
 
-	}(),
-
-	applyAxisAngle: function () {
-
-		var quaternion = new _Quaternion_js__WEBPACK_IMPORTED_MODULE_2__["Quaternion"]();
-
-		return function applyAxisAngle( axis, angle ) {
-
-			return this.applyQuaternion( quaternion.setFromAxisAngle( axis, angle ) );
-
-		};
-
-	}(),
+	},
 
 	applyMatrix3: function ( m ) {
 
@@ -25291,6 +26865,12 @@ Object.assign( Vector3.prototype, {
 		this.z = e[ 2 ] * x + e[ 5 ] * y + e[ 8 ] * z;
 
 		return this;
+
+	},
+
+	applyNormalMatrix: function ( m ) {
+
+		return this.applyMatrix3( m ).normalize();
 
 	},
 
@@ -25337,17 +26917,11 @@ Object.assign( Vector3.prototype, {
 
 	},
 
-	unproject: function () {
+	unproject: function ( camera ) {
 
-		var matrix = new _Matrix4_js__WEBPACK_IMPORTED_MODULE_1__["Matrix4"]();
+		return this.applyMatrix4( camera.projectionMatrixInverse ).applyMatrix4( camera.matrixWorld );
 
-		return function unproject( camera ) {
-
-			return this.applyMatrix4( matrix.getInverse( camera.projectionMatrix ) ).applyMatrix4( camera.matrixWorld );
-
-		};
-
-	}(),
+	},
 
 	transformDirection: function ( m ) {
 
@@ -25413,21 +26987,15 @@ Object.assign( Vector3.prototype, {
 
 	},
 
-	clampScalar: function () {
+	clampScalar: function ( minVal, maxVal ) {
 
-		var min = new Vector3();
-		var max = new Vector3();
+		this.x = Math.max( minVal, Math.min( maxVal, this.x ) );
+		this.y = Math.max( minVal, Math.min( maxVal, this.y ) );
+		this.z = Math.max( minVal, Math.min( maxVal, this.z ) );
 
-		return function clampScalar( minVal, maxVal ) {
+		return this;
 
-			min.set( minVal, minVal, minVal );
-			max.set( maxVal, maxVal, maxVal );
-
-			return this.clamp( min, max );
-
-		};
-
-	}(),
+	},
 
 	clampLength: function ( min, max ) {
 
@@ -25567,50 +27135,46 @@ Object.assign( Vector3.prototype, {
 
 	},
 
-	projectOnVector: function ( vector ) {
+	projectOnVector: function ( v ) {
 
-		var scalar = vector.dot( this ) / vector.lengthSq();
+		var denominator = v.lengthSq();
 
-		return this.copy( vector ).multiplyScalar( scalar );
+		if ( denominator === 0 ) return this.set( 0, 0, 0 );
+
+		var scalar = v.dot( this ) / denominator;
+
+		return this.copy( v ).multiplyScalar( scalar );
 
 	},
 
-	projectOnPlane: function () {
+	projectOnPlane: function ( planeNormal ) {
 
-		var v1 = new Vector3();
+		_vector.copy( this ).projectOnVector( planeNormal );
 
-		return function projectOnPlane( planeNormal ) {
+		return this.sub( _vector );
 
-			v1.copy( this ).projectOnVector( planeNormal );
+	},
 
-			return this.sub( v1 );
-
-		};
-
-	}(),
-
-	reflect: function () {
+	reflect: function ( normal ) {
 
 		// reflect incident vector off plane orthogonal to normal
 		// normal is assumed to have unit length
 
-		var v1 = new Vector3();
+		return this.sub( _vector.copy( normal ).multiplyScalar( 2 * this.dot( normal ) ) );
 
-		return function reflect( normal ) {
-
-			return this.sub( v1.copy( normal ).multiplyScalar( 2 * this.dot( normal ) ) );
-
-		};
-
-	}(),
+	},
 
 	angleTo: function ( v ) {
 
-		var theta = this.dot( v ) / ( Math.sqrt( this.lengthSq() * v.lengthSq() ) );
+		var denominator = Math.sqrt( this.lengthSq() * v.lengthSq() );
+
+		if ( denominator === 0 ) return Math.PI / 2;
+
+		var theta = this.dot( v ) / denominator;
 
 		// clamp, to handle numerical problems
 
-		return Math.acos( _Math_js__WEBPACK_IMPORTED_MODULE_0__["_Math"].clamp( theta, - 1, 1 ) );
+		return Math.acos( _MathUtils_js__WEBPACK_IMPORTED_MODULE_0__["MathUtils"].clamp( theta, - 1, 1 ) );
 
 	},
 
@@ -25700,6 +27264,12 @@ Object.assign( Vector3.prototype, {
 
 	},
 
+	setFromMatrix3Column: function ( m, index ) {
+
+		return this.fromArray( m.elements, index * 3 );
+
+	},
+
 	equals: function ( v ) {
 
 		return ( ( v.x === this.x ) && ( v.y === this.y ) && ( v.z === this.z ) );
@@ -25752,620 +27322,6 @@ Object.assign( Vector3.prototype, {
 
 
 
-
-/***/ }),
-
-/***/ "./node_modules/util/support/isBufferBrowser.js":
-/*!******************************************************!*\
-  !*** ./node_modules/util/support/isBufferBrowser.js ***!
-  \******************************************************/
-/*! no static exports found */
-/***/ (function(module, exports) {
-
-module.exports = function isBuffer(arg) {
-  return arg && typeof arg === 'object'
-    && typeof arg.copy === 'function'
-    && typeof arg.fill === 'function'
-    && typeof arg.readUInt8 === 'function';
-}
-
-/***/ }),
-
-/***/ "./node_modules/util/util.js":
-/*!***********************************!*\
-  !*** ./node_modules/util/util.js ***!
-  \***********************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-/* WEBPACK VAR INJECTION */(function(global, process) {// Copyright Joyent, Inc. and other Node contributors.
-//
-// Permission is hereby granted, free of charge, to any person obtaining a
-// copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to permit
-// persons to whom the Software is furnished to do so, subject to the
-// following conditions:
-//
-// The above copyright notice and this permission notice shall be included
-// in all copies or substantial portions of the Software.
-//
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
-// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
-// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
-// USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-var formatRegExp = /%[sdj%]/g;
-exports.format = function(f) {
-  if (!isString(f)) {
-    var objects = [];
-    for (var i = 0; i < arguments.length; i++) {
-      objects.push(inspect(arguments[i]));
-    }
-    return objects.join(' ');
-  }
-
-  var i = 1;
-  var args = arguments;
-  var len = args.length;
-  var str = String(f).replace(formatRegExp, function(x) {
-    if (x === '%%') return '%';
-    if (i >= len) return x;
-    switch (x) {
-      case '%s': return String(args[i++]);
-      case '%d': return Number(args[i++]);
-      case '%j':
-        try {
-          return JSON.stringify(args[i++]);
-        } catch (_) {
-          return '[Circular]';
-        }
-      default:
-        return x;
-    }
-  });
-  for (var x = args[i]; i < len; x = args[++i]) {
-    if (isNull(x) || !isObject(x)) {
-      str += ' ' + x;
-    } else {
-      str += ' ' + inspect(x);
-    }
-  }
-  return str;
-};
-
-
-// Mark that a method should not be used.
-// Returns a modified function which warns once by default.
-// If --no-deprecation is set, then it is a no-op.
-exports.deprecate = function(fn, msg) {
-  // Allow for deprecating things in the process of starting up.
-  if (isUndefined(global.process)) {
-    return function() {
-      return exports.deprecate(fn, msg).apply(this, arguments);
-    };
-  }
-
-  if (process.noDeprecation === true) {
-    return fn;
-  }
-
-  var warned = false;
-  function deprecated() {
-    if (!warned) {
-      if (process.throwDeprecation) {
-        throw new Error(msg);
-      } else if (process.traceDeprecation) {
-        console.trace(msg);
-      } else {
-        console.error(msg);
-      }
-      warned = true;
-    }
-    return fn.apply(this, arguments);
-  }
-
-  return deprecated;
-};
-
-
-var debugs = {};
-var debugEnviron;
-exports.debuglog = function(set) {
-  if (isUndefined(debugEnviron))
-    debugEnviron = process.env.NODE_DEBUG || '';
-  set = set.toUpperCase();
-  if (!debugs[set]) {
-    if (new RegExp('\\b' + set + '\\b', 'i').test(debugEnviron)) {
-      var pid = process.pid;
-      debugs[set] = function() {
-        var msg = exports.format.apply(exports, arguments);
-        console.error('%s %d: %s', set, pid, msg);
-      };
-    } else {
-      debugs[set] = function() {};
-    }
-  }
-  return debugs[set];
-};
-
-
-/**
- * Echos the value of a value. Trys to print the value out
- * in the best way possible given the different types.
- *
- * @param {Object} obj The object to print out.
- * @param {Object} opts Optional options object that alters the output.
- */
-/* legacy: obj, showHidden, depth, colors*/
-function inspect(obj, opts) {
-  // default options
-  var ctx = {
-    seen: [],
-    stylize: stylizeNoColor
-  };
-  // legacy...
-  if (arguments.length >= 3) ctx.depth = arguments[2];
-  if (arguments.length >= 4) ctx.colors = arguments[3];
-  if (isBoolean(opts)) {
-    // legacy...
-    ctx.showHidden = opts;
-  } else if (opts) {
-    // got an "options" object
-    exports._extend(ctx, opts);
-  }
-  // set default options
-  if (isUndefined(ctx.showHidden)) ctx.showHidden = false;
-  if (isUndefined(ctx.depth)) ctx.depth = 2;
-  if (isUndefined(ctx.colors)) ctx.colors = false;
-  if (isUndefined(ctx.customInspect)) ctx.customInspect = true;
-  if (ctx.colors) ctx.stylize = stylizeWithColor;
-  return formatValue(ctx, obj, ctx.depth);
-}
-exports.inspect = inspect;
-
-
-// http://en.wikipedia.org/wiki/ANSI_escape_code#graphics
-inspect.colors = {
-  'bold' : [1, 22],
-  'italic' : [3, 23],
-  'underline' : [4, 24],
-  'inverse' : [7, 27],
-  'white' : [37, 39],
-  'grey' : [90, 39],
-  'black' : [30, 39],
-  'blue' : [34, 39],
-  'cyan' : [36, 39],
-  'green' : [32, 39],
-  'magenta' : [35, 39],
-  'red' : [31, 39],
-  'yellow' : [33, 39]
-};
-
-// Don't use 'blue' not visible on cmd.exe
-inspect.styles = {
-  'special': 'cyan',
-  'number': 'yellow',
-  'boolean': 'yellow',
-  'undefined': 'grey',
-  'null': 'bold',
-  'string': 'green',
-  'date': 'magenta',
-  // "name": intentionally not styling
-  'regexp': 'red'
-};
-
-
-function stylizeWithColor(str, styleType) {
-  var style = inspect.styles[styleType];
-
-  if (style) {
-    return '\u001b[' + inspect.colors[style][0] + 'm' + str +
-           '\u001b[' + inspect.colors[style][1] + 'm';
-  } else {
-    return str;
-  }
-}
-
-
-function stylizeNoColor(str, styleType) {
-  return str;
-}
-
-
-function arrayToHash(array) {
-  var hash = {};
-
-  array.forEach(function(val, idx) {
-    hash[val] = true;
-  });
-
-  return hash;
-}
-
-
-function formatValue(ctx, value, recurseTimes) {
-  // Provide a hook for user-specified inspect functions.
-  // Check that value is an object with an inspect function on it
-  if (ctx.customInspect &&
-      value &&
-      isFunction(value.inspect) &&
-      // Filter out the util module, it's inspect function is special
-      value.inspect !== exports.inspect &&
-      // Also filter out any prototype objects using the circular check.
-      !(value.constructor && value.constructor.prototype === value)) {
-    var ret = value.inspect(recurseTimes, ctx);
-    if (!isString(ret)) {
-      ret = formatValue(ctx, ret, recurseTimes);
-    }
-    return ret;
-  }
-
-  // Primitive types cannot have properties
-  var primitive = formatPrimitive(ctx, value);
-  if (primitive) {
-    return primitive;
-  }
-
-  // Look up the keys of the object.
-  var keys = Object.keys(value);
-  var visibleKeys = arrayToHash(keys);
-
-  if (ctx.showHidden) {
-    keys = Object.getOwnPropertyNames(value);
-  }
-
-  // IE doesn't make error fields non-enumerable
-  // http://msdn.microsoft.com/en-us/library/ie/dww52sbt(v=vs.94).aspx
-  if (isError(value)
-      && (keys.indexOf('message') >= 0 || keys.indexOf('description') >= 0)) {
-    return formatError(value);
-  }
-
-  // Some type of object without properties can be shortcutted.
-  if (keys.length === 0) {
-    if (isFunction(value)) {
-      var name = value.name ? ': ' + value.name : '';
-      return ctx.stylize('[Function' + name + ']', 'special');
-    }
-    if (isRegExp(value)) {
-      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
-    }
-    if (isDate(value)) {
-      return ctx.stylize(Date.prototype.toString.call(value), 'date');
-    }
-    if (isError(value)) {
-      return formatError(value);
-    }
-  }
-
-  var base = '', array = false, braces = ['{', '}'];
-
-  // Make Array say that they are Array
-  if (isArray(value)) {
-    array = true;
-    braces = ['[', ']'];
-  }
-
-  // Make functions say that they are functions
-  if (isFunction(value)) {
-    var n = value.name ? ': ' + value.name : '';
-    base = ' [Function' + n + ']';
-  }
-
-  // Make RegExps say that they are RegExps
-  if (isRegExp(value)) {
-    base = ' ' + RegExp.prototype.toString.call(value);
-  }
-
-  // Make dates with properties first say the date
-  if (isDate(value)) {
-    base = ' ' + Date.prototype.toUTCString.call(value);
-  }
-
-  // Make error with message first say the error
-  if (isError(value)) {
-    base = ' ' + formatError(value);
-  }
-
-  if (keys.length === 0 && (!array || value.length == 0)) {
-    return braces[0] + base + braces[1];
-  }
-
-  if (recurseTimes < 0) {
-    if (isRegExp(value)) {
-      return ctx.stylize(RegExp.prototype.toString.call(value), 'regexp');
-    } else {
-      return ctx.stylize('[Object]', 'special');
-    }
-  }
-
-  ctx.seen.push(value);
-
-  var output;
-  if (array) {
-    output = formatArray(ctx, value, recurseTimes, visibleKeys, keys);
-  } else {
-    output = keys.map(function(key) {
-      return formatProperty(ctx, value, recurseTimes, visibleKeys, key, array);
-    });
-  }
-
-  ctx.seen.pop();
-
-  return reduceToSingleString(output, base, braces);
-}
-
-
-function formatPrimitive(ctx, value) {
-  if (isUndefined(value))
-    return ctx.stylize('undefined', 'undefined');
-  if (isString(value)) {
-    var simple = '\'' + JSON.stringify(value).replace(/^"|"$/g, '')
-                                             .replace(/'/g, "\\'")
-                                             .replace(/\\"/g, '"') + '\'';
-    return ctx.stylize(simple, 'string');
-  }
-  if (isNumber(value))
-    return ctx.stylize('' + value, 'number');
-  if (isBoolean(value))
-    return ctx.stylize('' + value, 'boolean');
-  // For some reason typeof null is "object", so special case here.
-  if (isNull(value))
-    return ctx.stylize('null', 'null');
-}
-
-
-function formatError(value) {
-  return '[' + Error.prototype.toString.call(value) + ']';
-}
-
-
-function formatArray(ctx, value, recurseTimes, visibleKeys, keys) {
-  var output = [];
-  for (var i = 0, l = value.length; i < l; ++i) {
-    if (hasOwnProperty(value, String(i))) {
-      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
-          String(i), true));
-    } else {
-      output.push('');
-    }
-  }
-  keys.forEach(function(key) {
-    if (!key.match(/^\d+$/)) {
-      output.push(formatProperty(ctx, value, recurseTimes, visibleKeys,
-          key, true));
-    }
-  });
-  return output;
-}
-
-
-function formatProperty(ctx, value, recurseTimes, visibleKeys, key, array) {
-  var name, str, desc;
-  desc = Object.getOwnPropertyDescriptor(value, key) || { value: value[key] };
-  if (desc.get) {
-    if (desc.set) {
-      str = ctx.stylize('[Getter/Setter]', 'special');
-    } else {
-      str = ctx.stylize('[Getter]', 'special');
-    }
-  } else {
-    if (desc.set) {
-      str = ctx.stylize('[Setter]', 'special');
-    }
-  }
-  if (!hasOwnProperty(visibleKeys, key)) {
-    name = '[' + key + ']';
-  }
-  if (!str) {
-    if (ctx.seen.indexOf(desc.value) < 0) {
-      if (isNull(recurseTimes)) {
-        str = formatValue(ctx, desc.value, null);
-      } else {
-        str = formatValue(ctx, desc.value, recurseTimes - 1);
-      }
-      if (str.indexOf('\n') > -1) {
-        if (array) {
-          str = str.split('\n').map(function(line) {
-            return '  ' + line;
-          }).join('\n').substr(2);
-        } else {
-          str = '\n' + str.split('\n').map(function(line) {
-            return '   ' + line;
-          }).join('\n');
-        }
-      }
-    } else {
-      str = ctx.stylize('[Circular]', 'special');
-    }
-  }
-  if (isUndefined(name)) {
-    if (array && key.match(/^\d+$/)) {
-      return str;
-    }
-    name = JSON.stringify('' + key);
-    if (name.match(/^"([a-zA-Z_][a-zA-Z_0-9]*)"$/)) {
-      name = name.substr(1, name.length - 2);
-      name = ctx.stylize(name, 'name');
-    } else {
-      name = name.replace(/'/g, "\\'")
-                 .replace(/\\"/g, '"')
-                 .replace(/(^"|"$)/g, "'");
-      name = ctx.stylize(name, 'string');
-    }
-  }
-
-  return name + ': ' + str;
-}
-
-
-function reduceToSingleString(output, base, braces) {
-  var numLinesEst = 0;
-  var length = output.reduce(function(prev, cur) {
-    numLinesEst++;
-    if (cur.indexOf('\n') >= 0) numLinesEst++;
-    return prev + cur.replace(/\u001b\[\d\d?m/g, '').length + 1;
-  }, 0);
-
-  if (length > 60) {
-    return braces[0] +
-           (base === '' ? '' : base + '\n ') +
-           ' ' +
-           output.join(',\n  ') +
-           ' ' +
-           braces[1];
-  }
-
-  return braces[0] + base + ' ' + output.join(', ') + ' ' + braces[1];
-}
-
-
-// NOTE: These type checking functions intentionally don't use `instanceof`
-// because it is fragile and can be easily faked with `Object.create()`.
-function isArray(ar) {
-  return Array.isArray(ar);
-}
-exports.isArray = isArray;
-
-function isBoolean(arg) {
-  return typeof arg === 'boolean';
-}
-exports.isBoolean = isBoolean;
-
-function isNull(arg) {
-  return arg === null;
-}
-exports.isNull = isNull;
-
-function isNullOrUndefined(arg) {
-  return arg == null;
-}
-exports.isNullOrUndefined = isNullOrUndefined;
-
-function isNumber(arg) {
-  return typeof arg === 'number';
-}
-exports.isNumber = isNumber;
-
-function isString(arg) {
-  return typeof arg === 'string';
-}
-exports.isString = isString;
-
-function isSymbol(arg) {
-  return typeof arg === 'symbol';
-}
-exports.isSymbol = isSymbol;
-
-function isUndefined(arg) {
-  return arg === void 0;
-}
-exports.isUndefined = isUndefined;
-
-function isRegExp(re) {
-  return isObject(re) && objectToString(re) === '[object RegExp]';
-}
-exports.isRegExp = isRegExp;
-
-function isObject(arg) {
-  return typeof arg === 'object' && arg !== null;
-}
-exports.isObject = isObject;
-
-function isDate(d) {
-  return isObject(d) && objectToString(d) === '[object Date]';
-}
-exports.isDate = isDate;
-
-function isError(e) {
-  return isObject(e) &&
-      (objectToString(e) === '[object Error]' || e instanceof Error);
-}
-exports.isError = isError;
-
-function isFunction(arg) {
-  return typeof arg === 'function';
-}
-exports.isFunction = isFunction;
-
-function isPrimitive(arg) {
-  return arg === null ||
-         typeof arg === 'boolean' ||
-         typeof arg === 'number' ||
-         typeof arg === 'string' ||
-         typeof arg === 'symbol' ||  // ES6 symbol
-         typeof arg === 'undefined';
-}
-exports.isPrimitive = isPrimitive;
-
-exports.isBuffer = __webpack_require__(/*! ./support/isBuffer */ "./node_modules/util/support/isBufferBrowser.js");
-
-function objectToString(o) {
-  return Object.prototype.toString.call(o);
-}
-
-
-function pad(n) {
-  return n < 10 ? '0' + n.toString(10) : n.toString(10);
-}
-
-
-var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep',
-              'Oct', 'Nov', 'Dec'];
-
-// 26 Feb 16:19:34
-function timestamp() {
-  var d = new Date();
-  var time = [pad(d.getHours()),
-              pad(d.getMinutes()),
-              pad(d.getSeconds())].join(':');
-  return [d.getDate(), months[d.getMonth()], time].join(' ');
-}
-
-
-// log is just a thin wrapper to console.log that prepends a timestamp
-exports.log = function() {
-  console.log('%s - %s', timestamp(), exports.format.apply(exports, arguments));
-};
-
-
-/**
- * Inherit the prototype methods from one constructor into another.
- *
- * The Function.prototype.inherits from lang.js rewritten as a standalone
- * function (not on Function.prototype). NOTE: If this file is to be loaded
- * during bootstrapping this function needs to be rewritten using some native
- * functions as prototype setup using normal JavaScript does not work as
- * expected during bootstrapping (see mirror.js in r114903).
- *
- * @param {function} ctor Constructor function which needs to inherit the
- *     prototype.
- * @param {function} superCtor Constructor function to inherit prototype from.
- */
-exports.inherits = __webpack_require__(/*! inherits */ "./node_modules/inherits/inherits_browser.js");
-
-exports._extend = function(origin, add) {
-  // Don't do anything if add isn't an object
-  if (!add || !isObject(add)) return origin;
-
-  var keys = Object.keys(add);
-  var i = keys.length;
-  while (i--) {
-    origin[keys[i]] = add[keys[i]];
-  }
-  return origin;
-};
-
-function hasOwnProperty(obj, prop) {
-  return Object.prototype.hasOwnProperty.call(obj, prop);
-}
-
-/* WEBPACK VAR INJECTION */}.call(this, __webpack_require__(/*! ./../webpack/buildin/global.js */ "./node_modules/webpack/buildin/global.js"), __webpack_require__(/*! ./../process/browser.js */ "./node_modules/process/browser.js")))
 
 /***/ }),
 
@@ -26869,7 +27825,7 @@ module.exports = g;
 /*! exports provided: name, version, main, keywords, author, license, repository, config, lint-staged, prettier, sideEffects, dependencies, scripts, devDependencies, engines, default */
 /***/ (function(module) {
 
-module.exports = {"name":"ami.js","version":"0.32.0","main":"build/ami.js","keywords":["ami","ami.js","three.js","webgl","dicom","nifti","awesome","medical","imaging","xtk","nrrd","vtk","stl","trk"],"author":{"name":"Nicolas Rannou","email":"nicolas@eunate.ch","url":"https://eunate.ch"},"license":"Apache-2.0","repository":{"type":"git","url":"https://fnndsc.github.io/ami"},"config":{"gaKey":"UA-39303022-3","babel":"--module-bind js=babel-loader --colors --display-error-details"},"lint-staged":{"{{src/**,examples/**, lessons/**}/,}.{js,jsx,json,css,ts,tsx}":["prettier --write","git add"]},"prettier":{"printWidth":100,"singleQuote":true,"trailingComma":"es5","overrides":[{"files":"*.css","options":{"useTabs":false,"tabWidth":2}}]},"sideEffects":false,"dependencies":{"OpenJPEG.js":"joedrago/openjpeg#master","dicom-parser":"1.8.1","image-JPEG2000":"ReflexionMed/image-JPEG2000#master","jpeg-lossless-decoder-js":"1.2.3","math-float32-to-binary-string":"^1.0.0","nifti-reader-js":"v0.5.3","nrrd-js":"^0.2.1","pako":"1.0.1","three":"latest"},"scripts":{"precommit":"lint-staged","tslint-check":"tslint-config-prettier-check ./tslint.json","check-codestyle":"prettier-check 'src/**/*.{js,jsx,json,css,ts,tsx}'","fix-all-code-style":"prettier --write '{{src/**,examples/**, lessons/**}/,}*.{js,jsx,json,css,ts,tsx}'","build:ami":"webpack --config webpack.config.build.js --display-error-details","build:ami:prod":"cross-env NODE_ENV=production yarn build:ami","build:clean":"rimraf -rf build/*","build:clean:hot":"rimraf -rf build/*.hot-update.*","dev:ami":"webpack --config webpack.config.build.js --hot --watch --colors","dist:ami":"yarn build:clean && yarn build:ami && yarn build:ami:prod && yarn doc","dist:examples":"node ./scripts/buildDist.js && node ./scripts/router.js examples deploy","dist:clean":"rimraf -rf dist/*","analyze:ami":"cross-env NODE_WEBPACK_ANALYZE=true yarn build:ami","analyze:ami:prod":"cross-env NODE_WEBPACK_ANALYZE=true yarn build:ami:prod","clean":"yarn build:clean && yarn dist:clean","example":"node ./scripts/router.js examples","gen:index:examples":"node ./scripts/genIndexFiles.js examples","gen:index:examples:ga":"cross-env NODE_GA=true node ./scripts/genIndexFiles.js examples","test":"karma start","testExamples":"yarn dist:clean && yarn dist:examples","doc":"jsdoc -p -r -R README.md -c jsdoc.json -d dist/doc src","ami":"yarn dist:ami && yarn test","deploy":"yarn dist:clean && yarn build:clean && yarn dist:ami && yarn dist:examples && gh-pages -d dist"},"devDependencies":{"@types/jasmine":"^3.3.2","@types/node":"^10.11.3","@types/three":"^0.93.13","babel-cli":"latest","babel-core":"^6.26.0","babel-loader":"^7.1.2","babel-preset-env":"^1.6.0","babel-runtime":"^6.26.0","compression-webpack-plugin":"^1.0.1","cross-env":"^3.2.3","gh-pages":"^1.2.0","husky":"^1.1.3","jasmine-core":"^2.99.1","jsdoc":"jsdoc3/jsdoc#master","karma":"^2.0.5","karma-chrome-launcher":"^2.2.0","karma-jasmine":"^1.1.2","karma-sinon":"^1.0.5","karma-spec-reporter":"^0.0.32","karma-webpack":"3.0.0","lint-staged":"^8.0.4","live-server":"^1.1.0","node-pre-gyp":"^0.10.0","prettier":"^1.15.1","prettier-check":"^2.0.0","puppeteer":"^1.6.1","rimraf":"^2.6.1","rollup-plugin-node-builtins":"^2.1.2","shelljs":"^0.8.2","sinon":"^2.0.0","ts-loader":"^5.2.1","tslint":"^5.11.0","tslint-config-prettier":"^1.15.0","tslint-loader":"^3.6.0","typescript":"^3.1.1","uglifyjs-webpack-plugin":"^1.2.7","webpack":"^4.16.3","webpack-bundle-analyzer":"^2.9.0","webpack-cli":"^3.1.0","webpack-dev-server":"^3.1.5","webpack-watch-livereload-plugin":"^0.0.1"},"engines":{"node":">=6.9.0"}};
+module.exports = JSON.parse("{\"name\":\"ami.js\",\"version\":\"0.32.0\",\"main\":\"build/ami.js\",\"keywords\":[\"ami\",\"ami.js\",\"three.js\",\"webgl\",\"dicom\",\"nifti\",\"awesome\",\"medical\",\"imaging\",\"xtk\",\"nrrd\",\"vtk\",\"stl\",\"trk\"],\"author\":{\"name\":\"Nicolas Rannou\",\"email\":\"nicolas@eunate.ch\",\"url\":\"https://eunate.ch\"},\"license\":\"Apache-2.0\",\"repository\":{\"type\":\"git\",\"url\":\"https://fnndsc.github.io/ami\"},\"config\":{\"gaKey\":\"UA-39303022-3\",\"babel\":\"--module-bind js=babel-loader --colors --display-error-details\"},\"lint-staged\":{\"{{src/**,examples/**, lessons/**}/,}.{js,jsx,json,css,ts,tsx}\":[\"prettier --write\",\"git add\"]},\"prettier\":{\"printWidth\":100,\"singleQuote\":true,\"trailingComma\":\"es5\",\"overrides\":[{\"files\":\"*.css\",\"options\":{\"useTabs\":false,\"tabWidth\":2}}]},\"sideEffects\":false,\"dependencies\":{\"OpenJPEG.js\":\"joedrago/openjpeg#master\",\"dicom-parser\":\"1.8.1\",\"image-JPEG2000\":\"ReflexionMed/image-JPEG2000#master\",\"jpeg-lossless-decoder-js\":\"1.2.3\",\"math-float32-to-binary-string\":\"^1.0.0\",\"nifti-reader-js\":\"v0.5.3\",\"nrrd-js\":\"^0.2.1\",\"pako\":\"1.0.1\",\"three\":\"latest\"},\"scripts\":{\"precommit\":\"lint-staged\",\"tslint-check\":\"tslint-config-prettier-check ./tslint.json\",\"check-codestyle\":\"prettier-check 'src/**/*.{js,jsx,json,css,ts,tsx}'\",\"fix-all-code-style\":\"prettier --write '{{src/**,examples/**, lessons/**}/,}*.{js,jsx,json,css,ts,tsx}'\",\"build:ami\":\"webpack --config webpack.config.build.js --display-error-details\",\"build:ami:prod\":\"cross-env NODE_ENV=production yarn build:ami\",\"build:clean\":\"rimraf -rf build/*\",\"build:clean:hot\":\"rimraf -rf build/*.hot-update.*\",\"dev:ami\":\"webpack --config webpack.config.build.js --hot --watch --colors\",\"dist:ami\":\"yarn build:clean && yarn build:ami && yarn build:ami:prod && yarn doc\",\"dist:examples\":\"node ./scripts/buildDist.js && node ./scripts/router.js examples deploy\",\"dist:clean\":\"rimraf -rf dist/*\",\"analyze:ami\":\"cross-env NODE_WEBPACK_ANALYZE=true yarn build:ami\",\"analyze:ami:prod\":\"cross-env NODE_WEBPACK_ANALYZE=true yarn build:ami:prod\",\"clean\":\"yarn build:clean && yarn dist:clean\",\"example\":\"node ./scripts/router.js examples\",\"gen:index:examples\":\"node ./scripts/genIndexFiles.js examples\",\"gen:index:examples:ga\":\"cross-env NODE_GA=true node ./scripts/genIndexFiles.js examples\",\"test\":\"karma start\",\"testExamples\":\"yarn dist:clean && yarn dist:examples\",\"doc\":\"jsdoc -p -r -R README.md -c jsdoc.json -d dist/doc src\",\"ami\":\"yarn dist:ami && yarn test\",\"deploy\":\"yarn dist:clean && yarn build:clean && yarn dist:ami && yarn dist:examples && gh-pages -d dist\"},\"devDependencies\":{\"@types/jasmine\":\"^3.3.2\",\"@types/node\":\"^10.11.3\",\"@types/three\":\"^0.93.13\",\"babel-cli\":\"latest\",\"babel-core\":\"^6.26.0\",\"babel-loader\":\"^7.1.2\",\"babel-preset-env\":\"^1.6.0\",\"babel-runtime\":\"^6.26.0\",\"compression-webpack-plugin\":\"^1.0.1\",\"cross-env\":\"^3.2.3\",\"gh-pages\":\"^1.2.0\",\"husky\":\"^1.1.3\",\"jasmine-core\":\"^2.99.1\",\"jsdoc\":\"jsdoc3/jsdoc#master\",\"karma\":\"^2.0.5\",\"karma-chrome-launcher\":\"^2.2.0\",\"karma-jasmine\":\"^1.1.2\",\"karma-sinon\":\"^1.0.5\",\"karma-spec-reporter\":\"^0.0.32\",\"karma-webpack\":\"3.0.0\",\"lint-staged\":\"^8.0.4\",\"live-server\":\"^1.1.0\",\"node-pre-gyp\":\"^0.10.0\",\"prettier\":\"^1.15.1\",\"prettier-check\":\"^2.0.0\",\"puppeteer\":\"^1.6.1\",\"rimraf\":\"^2.6.1\",\"rollup-plugin-node-builtins\":\"^2.1.2\",\"shelljs\":\"^0.8.2\",\"sinon\":\"^2.0.0\",\"ts-loader\":\"^5.2.1\",\"tslint\":\"^5.11.0\",\"tslint-config-prettier\":\"^1.15.0\",\"tslint-loader\":\"^3.6.0\",\"typescript\":\"^3.1.1\",\"uglifyjs-webpack-plugin\":\"^1.2.7\",\"webpack\":\"^4.16.3\",\"webpack-bundle-analyzer\":\"^2.9.0\",\"webpack-cli\":\"^3.1.0\",\"webpack-dev-server\":\"^3.1.5\",\"webpack-watch-livereload-plugin\":\"^0.0.1\"},\"engines\":{\"node\":\">=6.9.0\"}}");
 
 /***/ }),
 
@@ -26896,7 +27852,6 @@ __export(__webpack_require__(/*! ./models/models */ "./src/models/models.js"));
 __export(__webpack_require__(/*! ./parsers/parsers */ "./src/parsers/parsers.js"));
 __export(__webpack_require__(/*! ./presets/presets */ "./src/presets/presets.js"));
 __export(__webpack_require__(/*! ./shaders/shaders */ "./src/shaders/shaders.js"));
-__export(__webpack_require__(/*! ./widgets/widgets */ "./src/widgets/widgets.js"));
 var packageVersion = __webpack_require__(/*! ../package.json */ "./package.json").version;
 var d3Version = __webpack_require__(/*! ../node_modules/three/package.json */ "./node_modules/three/package.json").version;
 window.console.log("ami " + packageVersion + " (three " + d3Version + ")");
@@ -34687,7 +35642,7 @@ var helpersVolumeRendering = function helpersVolumeRendering() {
 "use strict";
 __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _helpers_helpers_progressbar__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../helpers/helpers.progressbar */ "./src/helpers/helpers.progressbar.js");
-/* harmony import */ var events__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! events */ "./node_modules/events/events.js");
+/* harmony import */ var events__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! events */ "./node_modules/node-libs-browser/node_modules/events/events.js");
 /* harmony import */ var events__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(events__WEBPACK_IMPORTED_MODULE_1__);
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
@@ -35377,7 +36332,7 @@ var LoadersVolumes = function (_LoadersBase) {
       case 'DICOM':
       case 'IMA':
       case '':
-        Parser = _parsers_parsers_dicom__WEBPACK_IMPORTED_MODULE_5__["default"];
+        Parser = _parsers_parsers_nifti__WEBPACK_IMPORTED_MODULE_7__["default"];
         break;
       case 'MHD':
         Parser = _parsers_parsers_mhd__WEBPACK_IMPORTED_MODULE_6__["default"];
@@ -44205,7340 +45160,6 @@ var ShadersVertex = function () {
 }();
 
 /* harmony default export */ __webpack_exports__["default"] = (ShadersVertex);
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.angle.js":
-/*!**************************************!*\
-  !*** ./src/widgets/widgets.angle.js ***!
-  \**************************************/
-/*! exports provided: widgetsAngle, default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "widgetsAngle", function() { return widgetsAngle; });
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.base */ "./src/widgets/widgets.base.ts");
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_widgets_base__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _widgets_handle__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./widgets.handle */ "./src/widgets/widgets.handle.js");
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-
-
-
-/**
- * @module widgets/angle
- */
-var widgetsAngle = function widgetsAngle() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = Object(_widgets_base__WEBPACK_IMPORTED_MODULE_0__["widgetsBase"])(three);
-  return function (_Constructor) {
-    _inherits(_class, _Constructor);
-
-    function _class(targetMesh, controls) {
-      var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-      _classCallCheck(this, _class);
-
-      var _this = _possibleConstructorReturn(this, _Constructor.call(this, targetMesh, controls, params));
-
-      _this._widgetType = 'Angle';
-
-      // incoming parameters (optional: worldPosition)
-
-      // outgoing values
-      _this._opangle = null;
-
-      _this._moving = false;
-      _this._domHovered = false;
-      _this._defaultAngle = true;
-
-      // mesh stuff
-      _this._material = null;
-      _this._geometry = null;
-      _this._mesh = null;
-
-      // dom stuff
-      _this._line = null;
-      _this._line2 = null;
-      _this._label = null;
-
-      // add handles
-      _this._handles = [];
-
-      var handle = void 0;
-      var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-      for (var i = 0; i < 3; i++) {
-        handle = new WidgetsHandle(targetMesh, controls, params);
-        _this.add(handle);
-        _this._handles.push(handle);
-      }
-      _this._handles[1].active = true;
-      _this._handles[1].tracking = true;
-      _this._handles[2].active = true;
-      _this._handles[2].tracking = true;
-
-      _this._moveHandle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(_this._moveHandle);
-      _this._handles.push(_this._moveHandle);
-      _this._moveHandle.hide();
-
-      _this.create();
-
-      _this.onMove = _this.onMove.bind(_this);
-      _this.onHover = _this.onHover.bind(_this);
-      _this.addEventListeners();
-      return _this;
-    }
-
-    _class.prototype.addEventListeners = function addEventListeners() {
-      this._container.addEventListener('wheel', this.onMove);
-
-      this._line.addEventListener('mouseenter', this.onHover);
-      this._line.addEventListener('mouseleave', this.onHover);
-      this._line2.addEventListener('mouseenter', this.onHover);
-      this._line2.addEventListener('mouseleave', this.onHover);
-      this._label.addEventListener('mouseenter', this.onHover);
-      this._label.addEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.removeEventListeners = function removeEventListeners() {
-      this._container.removeEventListener('wheel', this.onMove);
-
-      this._line.removeEventListener('mouseenter', this.onHover);
-      this._line.removeEventListener('mouseleave', this.onHover);
-      this._line2.removeEventListener('mouseenter', this.onHover);
-      this._line2.removeEventListener('mouseleave', this.onHover);
-      this._label.removeEventListener('mouseenter', this.onHover);
-      this._label.removeEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.onHover = function onHover(evt) {
-      if (evt) {
-        this.hoverDom(evt);
-      }
-
-      this.hoverMesh();
-
-      this._hovered = this._handles[0].hovered || this._handles[1].hovered || this._handles[2].hovered || this._domHovered;
-      this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-    };
-
-    _class.prototype.hoverMesh = function hoverMesh() {
-      // check raycast intersection, do we want to hover on mesh or just css?
-    };
-
-    _class.prototype.hoverDom = function hoverDom(evt) {
-      this._domHovered = evt.type === 'mouseenter';
-    };
-
-    _class.prototype.onStart = function onStart(evt) {
-      this._moveHandle.onMove(evt, true);
-
-      this._handles[0].onStart(evt);
-      this._handles[1].onStart(evt);
-      this._handles[2].onStart(evt);
-
-      this._active = this._handles[0].active || this._handles[1].active || this._handles[2].active || this._domHovered;
-
-      if (this._domHovered && !this._handles[1].tracking && !this._handles[2].tracking) {
-        this._moving = true;
-        this._controls.enabled = false;
-      }
-
-      this.update();
-    };
-
-    _class.prototype.onMove = function onMove(evt) {
-      var _this2 = this;
-
-      if (this._active) {
-        var prevPosition = this._moveHandle.worldPosition.clone();
-
-        this._dragged = true;
-        this._moveHandle.onMove(evt, true);
-
-        if (this._moving) {
-          this._handles.slice(0, -1).forEach(function (handle) {
-            handle.worldPosition.add(_this2._moveHandle.worldPosition.clone().sub(prevPosition));
-          });
-        }
-      } else {
-        this.onHover(null);
-      }
-
-      this._handles[0].onMove(evt);
-      this._handles[1].onMove(evt);
-      this._handles[2].onMove(evt);
-
-      this.update();
-    };
-
-    _class.prototype.onEnd = function onEnd() {
-      this._handles[0].onEnd(); // First Handle
-
-      if (this._handles[1].tracking && this._handles[0].screenPosition.distanceTo(this._handles[1].screenPosition) < 10 || !this._handles[1].tracking && this._handles[2].tracking && this._handles[1].screenPosition.distanceTo(this._handles[2].screenPosition) < 10) {
-        return;
-      }
-
-      if (!this._dragged && this._active && !this._handles[2].tracking) {
-        this._selected = !this._selected; // change state if there was no dragging
-        this._handles[0].selected = this._selected;
-      }
-
-      // Third Handle
-      if (this._handles[1].active) {
-        this._handles[2].onEnd();
-      } else if (this._dragged || !this._handles[2].tracking) {
-        this._handles[2].tracking = false;
-        this._handles[2].onEnd();
-      } else {
-        this._handles[2].tracking = false;
-      }
-      this._handles[2].selected = this._selected;
-
-      // Second Handle
-      if (this._dragged || !this._handles[1].tracking) {
-        this._handles[1].tracking = false;
-        this._handles[1].onEnd();
-      } else {
-        this._handles[1].tracking = false;
-      }
-      this._handles[1].selected = this._selected;
-
-      this._active = this._handles[0].active || this._handles[1].active || this._handles[2].active;
-      this._dragged = this._handles[2].tracking;
-      this._moving = false;
-      this.update();
-    };
-
-    _class.prototype.create = function create() {
-      this.createMesh();
-      this.createDOM();
-    };
-
-    _class.prototype.createMesh = function createMesh() {
-      // geometry
-      this._geometry = new three.Geometry();
-      this._geometry.vertices = [this._handles[0].worldPosition, this._handles[1].worldPosition, this._handles[1].worldPosition, this._handles[2].worldPosition];
-
-      // material
-      this._material = new three.LineBasicMaterial();
-
-      this.updateMeshColor();
-
-      // mesh
-      this._mesh = new three.LineSegments(this._geometry, this._material);
-      this._mesh.visible = true;
-      this.add(this._mesh);
-    };
-
-    _class.prototype.createDOM = function createDOM() {
-      this._line = document.createElement('div');
-      this._line.className = 'widgets-line';
-      this._container.appendChild(this._line);
-
-      this._line2 = document.createElement('div');
-      this._line2.className = 'widgets-line';
-      this._container.appendChild(this._line2);
-
-      this._label = document.createElement('div');
-      this._label.className = 'widgets-label';
-      this._container.appendChild(this._label);
-
-      this.updateDOMColor();
-    };
-
-    _class.prototype.hideDOM = function hideDOM() {
-      this._line.style.display = 'none';
-      this._line2.style.display = 'none';
-      this._label.style.display = 'none';
-
-      this._handles.forEach(function (elem) {
-        return elem.hideDOM();
-      });
-    };
-
-    _class.prototype.showDOM = function showDOM() {
-      this._line.style.display = '';
-      this._line2.style.display = '';
-      this._label.style.display = '';
-
-      this._handles[0].showDOM();
-      this._handles[1].showDOM();
-      this._handles[2].showDOM();
-    };
-
-    _class.prototype.update = function update() {
-      this.updateColor();
-
-      this._handles[0].update();
-      this._handles[1].update();
-      this._handles[2].update();
-
-      // calculate values
-      this._opangle = this._handles[1].worldPosition.clone().sub(this._handles[0].worldPosition).angleTo(this._handles[1].worldPosition.clone().sub(this._handles[2].worldPosition)) * 180 / Math.PI || 0.0;
-      this._opangle = this._defaultAngle ? this._opangle : 360 - this._opangle;
-
-      this.updateMeshColor();
-      this.updateMeshPosition();
-
-      this.updateDOM();
-    };
-
-    _class.prototype.updateMeshColor = function updateMeshColor() {
-      if (this._material) {
-        this._material.color.set(this._color);
-      }
-    };
-
-    _class.prototype.updateMeshPosition = function updateMeshPosition() {
-      if (this._geometry) {
-        this._geometry.verticesNeedUpdate = true;
-      }
-    };
-
-    _class.prototype.updateDOM = function updateDOM() {
-      this.updateDOMColor();
-
-      // update first line
-      var lineData = this.getLineData(this._handles[1].screenPosition, this._handles[0].screenPosition);
-
-      this._line.style.transform = 'translate3D(' + lineData.transformX + 'px, ' + lineData.transformY + 'px, 0)\n            rotate(' + lineData.transformAngle + 'rad)';
-      this._line.style.width = lineData.length + 'px';
-
-      // update second line
-      var line2Data = this.getLineData(this._handles[1].screenPosition, this._handles[2].screenPosition);
-
-      this._line2.style.transform = 'translate3D(' + line2Data.transformX + 'px, ' + line2Data.transformY + 'px, 0)\n            rotate(' + line2Data.transformAngle + 'rad)';
-      this._line2.style.width = line2Data.length + 'px';
-
-      // update angle and label
-      this._label.innerHTML = this._opangle.toFixed(2) + '&deg;';
-
-      var paddingNormVector = lineData.line.clone().add(line2Data.line).normalize().negate();
-      var normAngle = paddingNormVector.angleTo(new three.Vector3(1, 0, 0));
-
-      if (normAngle > Math.PI / 2) {
-        normAngle = Math.PI - normAngle;
-      }
-
-      var labelPadding = Math.tan(normAngle) < this._label.offsetHeight / this._label.offsetWidth ? this._label.offsetWidth / 2 / Math.cos(normAngle) + 15 // 15px padding
-      : this._label.offsetHeight / 2 / Math.cos(Math.PI / 2 - normAngle) + 15;
-      var paddingPoint = this._handles[1].screenPosition.clone().add(paddingNormVector.multiplyScalar(labelPadding));
-      var transform = this.adjustLabelTransform(this._label, paddingPoint);
-
-      this._label.style.transform = 'translate3D(' + transform.x + 'px, ' + transform.y + 'px, 0)';
-    };
-
-    _class.prototype.updateDOMColor = function updateDOMColor() {
-      this._line.style.backgroundColor = this._color;
-      this._line2.style.backgroundColor = this._color;
-      this._label.style.borderColor = this._color;
-    };
-
-    _class.prototype.free = function free() {
-      var _this3 = this;
-
-      this.removeEventListeners();
-
-      this._handles.forEach(function (h) {
-        _this3.remove(h);
-        h.free();
-      });
-      this._handles = [];
-
-      this._container.removeChild(this._line);
-      this._container.removeChild(this._line2);
-      this._container.removeChild(this._label);
-
-      // mesh, geometry, material
-      this.remove(this._mesh);
-      this._mesh.geometry.dispose();
-      this._mesh.geometry = null;
-      this._mesh.material.dispose();
-      this._mesh.material = null;
-      this._mesh = null;
-      this._geometry.dispose();
-      this._geometry = null;
-      this._material.vertexShader = null;
-      this._material.fragmentShader = null;
-      this._material.uniforms = null;
-      this._material.dispose();
-      this._material = null;
-
-      _Constructor.prototype.free.call(this);
-    };
-
-    _class.prototype.toggleDefaultAngle = function toggleDefaultAngle() {
-      this._defaultAngle = !this._defaultAngle;
-    };
-
-    _createClass(_class, [{
-      key: 'targetMesh',
-      get: function get() {
-        return this._targetMesh;
-      },
-      set: function set(targetMesh) {
-        this._targetMesh = targetMesh;
-        this._handles.forEach(function (elem) {
-          return elem.targetMesh = targetMesh;
-        });
-        this.update();
-      }
-    }, {
-      key: 'worldPosition',
-      get: function get() {
-        return this._worldPosition;
-      },
-      set: function set(worldPosition) {
-        this._handles[0].worldPosition.copy(worldPosition);
-        this._handles[1].worldPosition.copy(worldPosition);
-        this._handles[2].worldPosition.copy(worldPosition);
-        this._worldPosition.copy(worldPosition);
-        this.update();
-      }
-    }, {
-      key: 'angle',
-      get: function get() {
-        return this._opangle;
-      }
-    }]);
-
-    return _class;
-  }(Constructor);
-};
-
-
-/* harmony default export */ __webpack_exports__["default"] = (widgetsAngle());
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.annotation.js":
-/*!*******************************************!*\
-  !*** ./src/widgets/widgets.annotation.js ***!
-  \*******************************************/
-/*! exports provided: widgetsAnnotation, default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "widgetsAnnotation", function() { return widgetsAnnotation; });
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.base */ "./src/widgets/widgets.base.ts");
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_widgets_base__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _widgets_handle__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./widgets.handle */ "./src/widgets/widgets.handle.js");
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-
-
-
-/**
- * @module widgets/annotation
- * @todo: add option to show only label (without mesh, dots and lines)
- */
-var widgetsAnnotation = function widgetsAnnotation() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = Object(_widgets_base__WEBPACK_IMPORTED_MODULE_0__["widgetsBase"])(three);
-  return function (_Constructor) {
-    _inherits(_class, _Constructor);
-
-    function _class(targetMesh, controls) {
-      var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-      _classCallCheck(this, _class);
-
-      var _this = _possibleConstructorReturn(this, _Constructor.call(this, targetMesh, controls, params));
-
-      _this._widgetType = 'Annotation';
-
-      // incoming parameters (optional: worldPosition)
-
-      _this._initialized = false; // set to true when the name of the label is entered
-      _this._movinglabel = null; // bool that turns true when the label is moving with the mouse
-      _this._labelmoved = false; // bool that turns true once the label is moved by the user (at least once)
-      _this._labelhovered = false;
-      _this._manuallabeldisplay = false; // Make true to force the label to be displayed
-
-      // mesh stuff
-      _this._material = null;
-      _this._geometry = null;
-      _this._meshline = null;
-      _this._cone = null;
-
-      // dom stuff
-      _this._line = null;
-      _this._dashline = null;
-      _this._label = null;
-      _this._labeltext = null;
-
-      // var
-      _this._labelOffset = new three.Vector3(); // difference between label center and second handle
-      _this._mouseLabelOffset = new three.Vector3(); // difference between mouse coordinates and label center
-
-      // add handles
-      _this._handles = [];
-
-      var handle = void 0;
-      var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-      for (var i = 0; i < 2; i++) {
-        handle = new WidgetsHandle(targetMesh, controls, params);
-        _this.add(handle);
-        _this._handles.push(handle);
-      }
-      _this._handles[1].active = true;
-
-      _this.create();
-      _this.initOffsets();
-
-      _this.onResize = _this.onResize.bind(_this);
-      _this.onMove = _this.onMove.bind(_this);
-      _this.onHoverlabel = _this.onHoverlabel.bind(_this);
-      _this.notonHoverlabel = _this.notonHoverlabel.bind(_this);
-      _this.changelabeltext = _this.changelabeltext.bind(_this);
-
-      _this.addEventListeners();
-      return _this;
-    }
-
-    _class.prototype.addEventListeners = function addEventListeners() {
-      window.addEventListener('resize', this.onResize);
-
-      this._label.addEventListener('mouseenter', this.onHoverlabel);
-      this._label.addEventListener('mouseleave', this.notonHoverlabel);
-      this._label.addEventListener('dblclick', this.changelabeltext);
-
-      this._container.addEventListener('wheel', this.onMove);
-    };
-
-    _class.prototype.removeEventListeners = function removeEventListeners() {
-      window.removeEventListener('resize', this.onResize);
-
-      this._label.removeEventListener('mouseenter', this.onHoverlabel);
-      this._label.removeEventListener('mouseleave', this.notonHoverlabel);
-      this._label.removeEventListener('dblclick', this.changelabeltext);
-
-      this._container.removeEventListener('wheel', this.onMove);
-    };
-
-    _class.prototype.onResize = function onResize() {
-      this.initOffsets();
-    };
-
-    _class.prototype.onHoverlabel = function onHoverlabel() {
-      // this function is called when mouse enters the label with "mouseenter" event
-      this._labelhovered = true;
-      this._container.style.cursor = 'pointer';
-    };
-
-    _class.prototype.notonHoverlabel = function notonHoverlabel() {
-      // this function is called when mouse leaves the label with "mouseleave" event
-      this._labelhovered = false;
-      this._container.style.cursor = 'default';
-    };
-
-    _class.prototype.onStart = function onStart(evt) {
-      if (this._labelhovered) {
-        // if label hovered then it should be moved
-        // save mouse coordinates offset from label center
-        var offsets = this.getMouseOffsets(evt, this._container);
-        var paddingPoint = this._handles[1].screenPosition.clone().sub(this._labelOffset);
-
-        this._mouseLabelOffset = new three.Vector3(offsets.screenX - paddingPoint.x, offsets.screenY - paddingPoint.y, 0);
-        this._movinglabel = true;
-        this._labelmoved = true;
-      }
-
-      this._handles[0].onStart(evt);
-      this._handles[1].onStart(evt);
-
-      this._active = this._handles[0].active || this._handles[1].active || this._labelhovered;
-
-      this.update();
-    };
-
-    _class.prototype.onMove = function onMove(evt) {
-      if (this._movinglabel) {
-        var offsets = this.getMouseOffsets(evt, this._container);
-
-        this._labelOffset = new three.Vector3(this._handles[1].screenPosition.x - offsets.screenX + this._mouseLabelOffset.x, this._handles[1].screenPosition.y - offsets.screenY + this._mouseLabelOffset.y, 0);
-        this._controls.enabled = false;
-      }
-
-      if (this._active) {
-        this._dragged = true;
-      }
-
-      this._handles[0].onMove(evt);
-      this._handles[1].onMove(evt);
-
-      this._hovered = this._handles[0].hovered || this._handles[1].hovered || this._labelhovered;
-
-      this.update();
-    };
-
-    _class.prototype.onEnd = function onEnd() {
-      this._handles[0].onEnd(); // First Handle
-
-      // Second Handle
-      if (this._dragged || !this._handles[1].tracking) {
-        this._handles[1].tracking = false;
-        this._handles[1].onEnd();
-      } else {
-        this._handles[1].tracking = false;
-      }
-
-      if (!this._dragged && this._active && this._initialized) {
-        this._selected = !this._selected; // change state if there was no dragging
-        this._handles[0].selected = this._selected;
-        this._handles[1].selected = this._selected;
-      }
-
-      if (!this._initialized) {
-        this._labelOffset = this._handles[1].screenPosition.clone().sub(this._handles[0].screenPosition).multiplyScalar(0.5);
-        this.setlabeltext();
-        this._initialized = true;
-      }
-
-      this._active = this._handles[0].active || this._handles[1].active;
-      this._dragged = false;
-      this._movinglabel = false;
-      this.update();
-    };
-
-    _class.prototype.setlabeltext = function setlabeltext() {
-      // called when the user creates a new arrow
-      while (!this._labeltext) {
-        this._labeltext = prompt('Please enter the annotation text', '');
-      }
-      this.displaylabel();
-    };
-
-    _class.prototype.changelabeltext = function changelabeltext() {
-      // called when the user does double click in the label
-      this._labeltext = prompt('Please enter a new annotation text', this._label.innerHTML);
-      this.displaylabel();
-    };
-
-    _class.prototype.displaylabel = function displaylabel() {
-      this._label.innerHTML = typeof this._labeltext === 'string' && this._labeltext.length > 0 // avoid error
-      ? this._labeltext : ''; // empty string is passed or Cancel is pressed
-      // show the label (in css an empty string is used to revert display=none)
-      this._label.style.display = '';
-      this._dashline.style.display = '';
-      this._label.style.transform = 'translate3D(\n        ' + (this._handles[1].screenPosition.x - this._labelOffset.x - this._label.offsetWidth / 2) + 'px,\n        ' + (this._handles[1].screenPosition.y - this._labelOffset.y - this._label.offsetHeight / 2 - this._container.offsetHeight) + 'px, 0)';
-    };
-
-    _class.prototype.create = function create() {
-      this.createMesh();
-      this.createDOM();
-    };
-
-    _class.prototype.createMesh = function createMesh() {
-      // material
-      this._material = new three.LineBasicMaterial();
-
-      this.updateMeshColor();
-
-      // line geometry
-      this._geometry = new three.Geometry();
-      this._geometry.vertices.push(this._handles[0].worldPosition);
-      this._geometry.vertices.push(this._handles[1].worldPosition);
-
-      // line mesh
-      this._meshline = new three.Line(this._geometry, this._material);
-      this._meshline.visible = true;
-
-      this.add(this._meshline);
-
-      // cone geometry
-      this._conegeometry = new three.CylinderGeometry(0, 2, 10);
-      this._conegeometry.translate(0, -5, 0);
-      this._conegeometry.rotateX(-Math.PI / 2);
-
-      // cone mesh
-      this._cone = new three.Mesh(this._conegeometry, this._material);
-      this._cone.visible = true;
-
-      this.add(this._cone);
-    };
-
-    _class.prototype.createDOM = function createDOM() {
-      this._line = document.createElement('div');
-      this._line.className = 'widgets-line';
-      this._container.appendChild(this._line);
-
-      this._dashline = document.createElement('div');
-      this._dashline.className = 'widgets-dashline';
-      this._dashline.style.display = 'none';
-      this._container.appendChild(this._dashline);
-
-      this._label = document.createElement('div');
-      this._label.className = 'widgets-label';
-      this._label.style.display = 'none';
-      this._container.appendChild(this._label);
-
-      this.updateDOMColor();
-    };
-
-    _class.prototype.update = function update() {
-      this.updateColor();
-
-      this._handles[0].update();
-      this._handles[1].update();
-
-      this.updateMeshColor();
-      this.updateMeshPosition();
-
-      this.updateDOM();
-    };
-
-    _class.prototype.updateMeshColor = function updateMeshColor() {
-      if (this._material) {
-        this._material.color.set(this._color);
-      }
-    };
-
-    _class.prototype.updateMeshPosition = function updateMeshPosition() {
-      if (this._geometry) {
-        this._geometry.verticesNeedUpdate = true;
-      }
-
-      if (this._cone) {
-        this._cone.position.copy(this._handles[1].worldPosition);
-        this._cone.lookAt(this._handles[0].worldPosition);
-      }
-    };
-
-    _class.prototype.updateDOM = function updateDOM() {
-      this.updateDOMColor();
-
-      // update line
-      var lineData = this.getLineData(this._handles[0].screenPosition, this._handles[1].screenPosition);
-
-      this._line.style.transform = 'translate3D(' + lineData.transformX + 'px, ' + lineData.transformY + 'px, 0)\n        rotate(' + lineData.transformAngle + 'rad)';
-      this._line.style.width = lineData.length + 'px';
-
-      // update label
-      var paddingVector = lineData.line.multiplyScalar(0.5);
-      var paddingPoint = this._handles[1].screenPosition.clone().sub(this._labelmoved ? this._labelOffset // if the label is moved, then its position is defined by labelOffset
-      : paddingVector); // otherwise it's placed in the center of the line
-      var labelPosition = this.adjustLabelTransform(this._label, paddingPoint);
-
-      this._label.style.transform = 'translate3D(' + labelPosition.x + 'px, ' + labelPosition.y + 'px, 0)';
-
-      // create the label without the interaction of the user. Useful when we need to create the label manually
-      if (this._manuallabeldisplay) {
-        this.displaylabel();
-      }
-
-      // update dash line
-      var minLine = this.getLineData(this._handles[0].screenPosition, paddingPoint);
-      var lineCL = this.getLineData(lineData.center, paddingPoint);
-      var line1L = this.getLineData(this._handles[1].screenPosition, paddingPoint);
-
-      if (minLine.length > lineCL.length) {
-        minLine = lineCL;
-      }
-      if (minLine.length > line1L.length) {
-        minLine = line1L;
-      }
-
-      this._dashline.style.transform = 'translate3D(' + minLine.transformX + 'px, ' + minLine.transformY + 'px, 0)\n        rotate(' + minLine.transformAngle + 'rad)';
-      this._dashline.style.width = minLine.length + 'px';
-    };
-
-    _class.prototype.updateDOMColor = function updateDOMColor() {
-      this._line.style.backgroundColor = this._color;
-      this._dashline.style.borderTop = '1.5px dashed ' + this._color;
-      this._label.style.borderColor = this._color;
-    };
-
-    _class.prototype.hideDOM = function hideDOM() {
-      this._line.style.display = 'none';
-      this._dashline.style.display = 'none';
-      this._label.style.display = 'none';
-      this._handles.forEach(function (elem) {
-        return elem.hideDOM();
-      });
-    };
-
-    _class.prototype.showDOM = function showDOM() {
-      this._line.style.display = '';
-      this._dashline.style.display = '';
-      this._label.style.display = '';
-      this._handles.forEach(function (elem) {
-        return elem.showDOM();
-      });
-    };
-
-    _class.prototype.free = function free() {
-      var _this2 = this;
-
-      this.removeEventListeners();
-
-      this._handles.forEach(function (h) {
-        _this2.remove(h);
-        h.free();
-      });
-      this._handles = [];
-
-      this._container.removeChild(this._line);
-      this._container.removeChild(this._dashline);
-      this._container.removeChild(this._label);
-
-      // mesh, geometry, material
-      this.remove(this._meshline);
-      this._meshline.geometry.dispose();
-      this._meshline.geometry = null;
-      this._meshline.material.dispose();
-      this._meshline.material = null;
-      this._meshline = null;
-      this._geometry.dispose();
-      this._geometry = null;
-      this._material.vertexShader = null;
-      this._material.fragmentShader = null;
-      this._material.uniforms = null;
-      this._material.dispose();
-      this._material = null;
-      this.remove(this._cone);
-      this._cone.geometry.dispose();
-      this._cone.geometry = null;
-      this._cone.material.dispose();
-      this._cone.material = null;
-      this._cone = null;
-      this._conegeometry.dispose();
-      this._conegeometry = null;
-
-      _Constructor.prototype.free.call(this);
-    };
-
-    _createClass(_class, [{
-      key: 'targetMesh',
-      get: function get() {
-        return this._targetMesh;
-      },
-      set: function set(targetMesh) {
-        this._targetMesh = targetMesh;
-        this._handles.forEach(function (elem) {
-          return elem.targetMesh = targetMesh;
-        });
-        this.update();
-      }
-    }, {
-      key: 'worldPosition',
-      get: function get() {
-        return this._worldPosition;
-      },
-      set: function set(worldPosition) {
-        this._handles[0].worldPosition.copy(worldPosition);
-        this._handles[1].worldPosition.copy(worldPosition);
-        this._worldPosition.copy(worldPosition);
-        this.update();
-      }
-    }]);
-
-    return _class;
-  }(Constructor);
-};
-
-
-/* harmony default export */ __webpack_exports__["default"] = (widgetsAnnotation());
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.base.ts":
-/*!*************************************!*\
-  !*** ./src/widgets/widgets.base.ts ***!
-  \*************************************/
-/*! no static exports found */
-/***/ (function(module, exports, __webpack_require__) {
-
-"use strict";
-
-var __extends = (this && this.__extends) || (function () {
-    var extendStatics = function (d, b) {
-        extendStatics = Object.setPrototypeOf ||
-            ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
-            function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
-        return extendStatics(d, b);
-    };
-    return function (d, b) {
-        extendStatics(d, b);
-        function __() { this.constructor = d; }
-        d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
-    };
-})();
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-var widgets_css_1 = __importDefault(__webpack_require__(/*! ./widgets.css */ "./src/widgets/widgets.css.js"));
-var core_colors_1 = __webpack_require__(/*! ../core/core.colors */ "./src/core/core.colors.ts");
-var core_utils_1 = __importDefault(__webpack_require__(/*! ../core/core.utils */ "./src/core/core.utils.js"));
-/**
- * @module Abstract Widget
- */
-// tslint:disable-next-line
-var widgetsBase = function (three) {
-    if (three === void 0) { three = window.THREE; }
-    if (three === undefined || three.Object3D === undefined) {
-        return null;
-    }
-    var Constructor = three.Object3D;
-    return /** @class */ (function (_super) {
-        __extends(class_1, _super);
-        function class_1(targetMesh, controls, params) {
-            var _this = _super.call(this) || this;
-            _this._widgetType = 'Base';
-            _this._params = params;
-            if (params.hideMesh === true) {
-                _this.visible = false;
-            }
-            var elementStyle = document.getElementById('ami-widgets');
-            if (elementStyle === null) {
-                var styleEl = document.createElement('style');
-                styleEl.id = 'ami-widgets';
-                styleEl.innerHTML = widgets_css_1.default.code;
-                document.head.appendChild(styleEl);
-            }
-            _this._enabled = true;
-            _this._selected = false;
-            _this._hovered = true;
-            _this._active = true;
-            _this._colors = {
-                default: core_colors_1.COLORS.blue,
-                active: core_colors_1.COLORS.yellow,
-                hover: core_colors_1.COLORS.red,
-                select: core_colors_1.COLORS.green,
-                text: core_colors_1.COLORS.white,
-                error: core_colors_1.COLORS.lightRed,
-            };
-            _this._color = _this._colors.default;
-            _this._dragged = false;
-            // can not call it visible because it conflicts with THREE.Object3D
-            _this._displayed = true;
-            _this._targetMesh = targetMesh;
-            _this._controls = controls;
-            _this._camera = controls.object;
-            _this._container = controls.domElement;
-            _this._worldPosition = new three.Vector3(); // LPS position
-            if (params.worldPosition) {
-                _this._worldPosition.copy(params.worldPosition);
-            }
-            else if (_this._targetMesh !== null) {
-                _this._worldPosition.copy(_this._targetMesh.position);
-            }
-            return _this;
-        }
-        class_1.prototype.initOffsets = function () {
-            var box = this._container.getBoundingClientRect();
-            var body = document.body;
-            var docEl = document.documentElement;
-            var scrollTop = window.pageYOffset || docEl.scrollTop || body.scrollTop;
-            var scrollLeft = window.pageXOffset || docEl.scrollLeft || body.scrollLeft;
-            var clientTop = docEl.clientTop || body.clientTop || 0;
-            var clientLeft = docEl.clientLeft || body.clientLeft || 0;
-            this._offsets = {
-                top: Math.round(box.top + scrollTop - clientTop),
-                left: Math.round(box.left + scrollLeft - clientLeft),
-            };
-        };
-        class_1.prototype.getMouseOffsets = function (event, container) {
-            return {
-                x: ((event.clientX - this._offsets.left) / container.offsetWidth) * 2 - 1,
-                y: -((event.clientY - this._offsets.top) / container.offsetHeight) * 2 + 1,
-                screenX: event.clientX - this._offsets.left,
-                screenY: event.clientY - this._offsets.top,
-            };
-        };
-        /**
-         * Get area of polygon.
-         *
-         * @param {Array} points Ordered vertices' coordinates
-         *
-         * @returns {Number}
-         */
-        class_1.prototype.getArea = function (points) {
-            var area = 0;
-            var j = points.length - 1; // the last vertex is the 'previous' one to the first
-            for (var i = 0; i < points.length; i++) {
-                area += (points[j].x + points[i].x) * (points[j].y - points[i].y);
-                j = i; // j is the previous vertex to i
-            }
-            return Math.abs(area / 2);
-        };
-        /**
-         * Get index of ultrasound region by data coordinates.
-         *
-         * @param {Array}   regions US regions
-         * @param {Vector3} point   Data coordinates
-         *
-         * @returns {Number|null}
-         */
-        class_1.prototype.getRegionByXY = function (regions, point) {
-            var result = null;
-            regions.some(function (region, ind) {
-                if (point.x >= region.x0 &&
-                    point.x <= region.x1 &&
-                    point.y >= region.y0 &&
-                    point.y <= region.y1) {
-                    result = ind;
-                    return true;
-                }
-            });
-            return result;
-        };
-        /**
-         * Get point inside ultrasound region by data coordinates.
-         *
-         * @param {Object}  region US region data
-         * @param {Vector3} point  Data coordinates
-         *
-         * @returns {Vector2|null}
-         */
-        class_1.prototype.getPointInRegion = function (region, point) {
-            if (!region) {
-                return null;
-            }
-            return new three.Vector2((point.x - region.x0 - (region.axisX || 0)) * region.deltaX, (point.y - region.y0 - (region.axisY || 0)) * region.deltaY);
-        };
-        /**
-         * Get point's ultrasound coordinates by data coordinates.
-         *
-         * @param {Array}   regions US regions
-         * @param {Vector3} point   Data coordinates
-         *
-         * @returns {Vector2|null}
-         */
-        class_1.prototype.getUsPoint = function (regions, point) {
-            return this.getPointInRegion(regions[this.getRegionByXY(regions, point)], point);
-        };
-        /**
-         * Get distance between points inside ultrasound region.
-         *
-         * @param {Vector3} pointA Begin data coordinates
-         * @param {Vector3} pointB End data coordinates
-         *
-         * @returns {Number|null}
-         */
-        class_1.prototype.getUsDistance = function (pointA, pointB) {
-            var regions = this._params.ultrasoundRegions || [];
-            if (regions.length < 1) {
-                return null;
-            }
-            var regionA = this.getRegionByXY(regions, pointA);
-            var regionB = this.getRegionByXY(regions, pointB);
-            if (regionA === null ||
-                regionB === null ||
-                regionA !== regionB ||
-                regions[regionA].unitsX !== 'cm' ||
-                regions[regionA].unitsY !== 'cm') {
-                return null;
-            }
-            return this.getPointInRegion(regions[regionA], pointA).distanceTo(this.getPointInRegion(regions[regionA], pointB));
-        };
-        /**
-         * Get distance between points
-         *
-         * @param {Vector3} pointA Begin world coordinates
-         * @param {Vector3} pointB End world coordinates
-         * @param {number}  cf     Calibration factor
-         *
-         * @returns {Object}
-         */
-        class_1.prototype.getDistanceData = function (pointA, pointB, calibrationFactor) {
-            var distance = null;
-            var units = null;
-            if (calibrationFactor) {
-                distance = pointA.distanceTo(pointB) * calibrationFactor;
-            }
-            else if (this._params.ultrasoundRegions && this._params.lps2IJK) {
-                var usDistance = this.getUsDistance(core_utils_1.default.worldToData(this._params.lps2IJK, pointA), core_utils_1.default.worldToData(this._params.lps2IJK, pointB));
-                if (usDistance !== null) {
-                    distance = usDistance * 10;
-                    units = 'mm';
-                }
-                else {
-                    distance = pointA.distanceTo(pointB);
-                    units = this._params.pixelSpacing ? 'mm' : 'units';
-                }
-            }
-            else {
-                distance = pointA.distanceTo(pointB);
-            }
-            return {
-                distance: distance,
-                units: units,
-            };
-        };
-        class_1.prototype.getLineData = function (pointA, pointB) {
-            var line = pointB.clone().sub(pointA);
-            var center = pointB
-                .clone()
-                .add(pointA)
-                .multiplyScalar(0.5);
-            var length = line.length();
-            var angle = line.angleTo(new three.Vector3(1, 0, 0));
-            return {
-                line: line,
-                length: length,
-                transformX: center.x - length / 2,
-                transformY: center.y - this._container.offsetHeight,
-                transformAngle: pointA.y < pointB.y ? angle : -angle,
-                center: center,
-            };
-        };
-        class_1.prototype.getRectData = function (pointA, pointB) {
-            var line = pointB.clone().sub(pointA);
-            var vertical = line.clone().projectOnVector(new three.Vector3(0, 1, 0));
-            var min = pointA.clone().min(pointB); // coordinates of the top left corner
-            return {
-                width: line
-                    .clone()
-                    .projectOnVector(new three.Vector3(1, 0, 0))
-                    .length(),
-                height: vertical.length(),
-                transformX: min.x,
-                transformY: min.y - this._container.offsetHeight,
-                paddingVector: vertical.clone().normalize(),
-            };
-        };
-        /**
-         * @param {HTMLElement} label
-         * @param {Vector3}     point  label's center coordinates (default)
-         * @param {Boolean}     corner if true, then point is the label's top left corner coordinates
-         */
-        class_1.prototype.adjustLabelTransform = function (label, point, corner) {
-            var x = Math.round(point.x - (corner ? 0 : label.offsetWidth / 2));
-            var y = Math.round(point.y - (corner ? 0 : label.offsetHeight / 2)) - this._container.offsetHeight;
-            if (x < 0) {
-                x = x > -label.offsetWidth ? 0 : x + label.offsetWidth;
-            }
-            else if (x > this._container.offsetWidth - label.offsetWidth) {
-                x =
-                    x < this._container.offsetWidth
-                        ? this._container.offsetWidth - label.offsetWidth
-                        : x - label.offsetWidth;
-            }
-            if (y < -this._container.offsetHeight) {
-                y =
-                    y > -this._container.offsetHeight - label.offsetHeight
-                        ? -this._container.offsetHeight
-                        : y + label.offsetHeight;
-            }
-            else if (y > -label.offsetHeight) {
-                y = y < 0 ? -label.offsetHeight : y - label.offsetHeight;
-            }
-            return new three.Vector2(x, y);
-        };
-        class_1.prototype.worldToScreen = function (worldCoordinate) {
-            var screenCoordinates = worldCoordinate.clone();
-            screenCoordinates.project(this._camera);
-            screenCoordinates.x = Math.round(((screenCoordinates.x + 1) * this._container.offsetWidth) / 2);
-            screenCoordinates.y = Math.round(((-screenCoordinates.y + 1) * this._container.offsetHeight) / 2);
-            screenCoordinates.z = 0;
-            return screenCoordinates;
-        };
-        class_1.prototype.update = function () {
-            // to be overloaded
-            window.console.log('update() should be overloaded!');
-        };
-        class_1.prototype.updateColor = function () {
-            if (this._active) {
-                this._color = this._colors.active;
-            }
-            else if (this._hovered) {
-                this._color = this._colors.hover;
-            }
-            else if (this._selected) {
-                this._color = this._colors.select;
-            }
-            else {
-                this._color = this._colors.default;
-            }
-        };
-        // tslint:disable-next-line
-        class_1.prototype.setDefaultColor = function (color) {
-            this._colors.default = color;
-            if (this._handles) {
-                this._handles.forEach(function (elem) { return (elem._colors.default = color); });
-            }
-            this.update();
-        };
-        class_1.prototype.show = function () {
-            this.showDOM();
-            this.showMesh();
-            this.update();
-            this._displayed = true;
-        };
-        class_1.prototype.hide = function () {
-            this.hideDOM();
-            this.hideMesh();
-            this._displayed = false;
-        };
-        class_1.prototype.hideDOM = function () {
-            // to be overloaded
-            window.console.log('hideDOM() should be overloaded!');
-        };
-        class_1.prototype.showDOM = function () {
-            // to be overloaded
-            window.console.log('showDOM() should be overloaded!');
-        };
-        class_1.prototype.hideMesh = function () {
-            this.visible = false;
-        };
-        class_1.prototype.showMesh = function () {
-            if (this._params.hideMesh === true) {
-                return;
-            }
-            this.visible = true;
-        };
-        class_1.prototype.free = function () {
-            this._camera = null;
-            this._container = null;
-            this._controls = null;
-            this._params = null;
-            this._targetMesh = null;
-        };
-        Object.defineProperty(class_1.prototype, "widgetType", {
-            get: function () {
-                return this._widgetType;
-            },
-            enumerable: true,
-            configurable: true
-        });
-        Object.defineProperty(class_1.prototype, "targetMesh", {
-            get: function () {
-                return this._targetMesh;
-            },
-            set: function (targetMesh) {
-                this._targetMesh = targetMesh;
-                this.update();
-            },
-            enumerable: true,
-            configurable: true
-        });
-        Object.defineProperty(class_1.prototype, "worldPosition", {
-            get: function () {
-                return this._worldPosition;
-            },
-            set: function (worldPosition) {
-                this._worldPosition.copy(worldPosition);
-                this.update();
-            },
-            enumerable: true,
-            configurable: true
-        });
-        Object.defineProperty(class_1.prototype, "enabled", {
-            get: function () {
-                return this._enabled;
-            },
-            set: function (enabled) {
-                this._enabled = enabled;
-                this.update();
-            },
-            enumerable: true,
-            configurable: true
-        });
-        Object.defineProperty(class_1.prototype, "selected", {
-            get: function () {
-                return this._selected;
-            },
-            set: function (selected) {
-                this._selected = selected;
-                this.update();
-            },
-            enumerable: true,
-            configurable: true
-        });
-        Object.defineProperty(class_1.prototype, "hovered", {
-            get: function () {
-                return this._hovered;
-            },
-            set: function (hovered) {
-                this._hovered = hovered;
-                this.update();
-            },
-            enumerable: true,
-            configurable: true
-        });
-        Object.defineProperty(class_1.prototype, "dragged", {
-            get: function () {
-                return this._dragged;
-            },
-            set: function (dragged) {
-                this._dragged = dragged;
-                this.update();
-            },
-            enumerable: true,
-            configurable: true
-        });
-        Object.defineProperty(class_1.prototype, "displayed", {
-            get: function () {
-                return this._displayed;
-            },
-            set: function (displayed) {
-                this._displayed = displayed;
-                this.update();
-            },
-            enumerable: true,
-            configurable: true
-        });
-        Object.defineProperty(class_1.prototype, "active", {
-            get: function () {
-                return this._active;
-            },
-            set: function (active) {
-                this._active = active;
-                this.update();
-            },
-            enumerable: true,
-            configurable: true
-        });
-        Object.defineProperty(class_1.prototype, "color", {
-            get: function () {
-                return this._color;
-            },
-            // tslint:disable-next-line
-            set: function (color) {
-                this._color = color;
-                this.update();
-            },
-            enumerable: true,
-            configurable: true
-        });
-        return class_1;
-    }(Constructor));
-};
-exports.widgetsBase = widgetsBase;
-exports.default = widgetsBase();
-
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.biruler.js":
-/*!****************************************!*\
-  !*** ./src/widgets/widgets.biruler.js ***!
-  \****************************************/
-/*! exports provided: widgetsBiruler, default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "widgetsBiruler", function() { return widgetsBiruler; });
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.base */ "./src/widgets/widgets.base.ts");
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_widgets_base__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _widgets_handle__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./widgets.handle */ "./src/widgets/widgets.handle.js");
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-
-
-
-/**
- * @module widgets/biruler
- */
-var widgetsBiruler = function widgetsBiruler() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = Object(_widgets_base__WEBPACK_IMPORTED_MODULE_0__["widgetsBase"])(three);
-  return function (_Constructor) {
-    _inherits(_class, _Constructor);
-
-    function _class(targetMesh, controls) {
-      var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-      _classCallCheck(this, _class);
-
-      var _this = _possibleConstructorReturn(this, _Constructor.call(this, targetMesh, controls, params));
-
-      _this._widgetType = 'BiRuler';
-
-      // incoming parameters (optional: lps2IJK, pixelSpacing, ultrasoundRegions, worldPosition)
-      _this._calibrationFactor = params.calibrationFactor || null;
-
-      // outgoing values
-      _this._distance = null;
-      _this._distance2 = null;
-      _this._units = !_this._calibrationFactor && !params.pixelSpacing ? 'units' : 'mm';
-
-      // mesh stuff
-      _this._material = null;
-      _this._geometry = null;
-      _this._mesh = null;
-
-      // dom stuff
-      _this._line = null;
-      _this._label = null;
-      _this._line2 = null;
-      _this._label2 = null;
-      _this._dashline = null;
-
-      // add handles
-      _this._handles = [];
-
-      var handle = void 0;
-      var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-      for (var i = 0; i < 4; i++) {
-        handle = new WidgetsHandle(targetMesh, controls, params);
-        _this.add(handle);
-        _this._handles.push(handle);
-      }
-      _this._handles[1].active = true;
-      _this._handles[1].tracking = true;
-      _this._handles[3].active = true;
-      _this._handles[3].tracking = true;
-
-      _this.create();
-
-      _this.onMove = _this.onMove.bind(_this);
-      _this.addEventListeners();
-      return _this;
-    }
-
-    _class.prototype.addEventListeners = function addEventListeners() {
-      this._container.addEventListener('wheel', this.onMove);
-    };
-
-    _class.prototype.removeEventListeners = function removeEventListeners() {
-      this._container.removeEventListener('wheel', this.onMove);
-    };
-
-    _class.prototype.onStart = function onStart(evt) {
-      this._handles.forEach(function (elem) {
-        return elem.onStart(evt);
-      });
-
-      this._active = this._handles[0].active || this._handles[1].active || this._handles[2].active || this._handles[3].active;
-
-      this.update();
-    };
-
-    _class.prototype.onMove = function onMove(evt) {
-      if (this._active) {
-        this._dragged = true;
-      } else {
-        this._hovered = this._handles[0].hovered || this._handles[1].hovered || this._handles[2].hovered || this._handles[3].hovered;
-        this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-      }
-
-      this._handles.forEach(function (elem) {
-        return elem.onMove(evt);
-      });
-
-      this.update();
-    };
-
-    _class.prototype.onEnd = function onEnd() {
-      this._handles[0].onEnd();
-      this._handles[2].onEnd();
-
-      if (this._handles[1].tracking && this._handles[0].screenPosition.distanceTo(this._handles[1].screenPosition) < 10) {
-        return;
-      }
-
-      if (!this._dragged && this._active && !this._handles[3].tracking) {
-        this._selected = !this._selected; // change state if there was no dragging
-        this._handles[0].selected = this._selected;
-        this._handles[2].selected = this._selected;
-      }
-
-      // Fourth Handle
-      if (this._handles[1].active) {
-        this._handles[3].onEnd();
-      } else if (this._dragged || !this._handles[3].tracking) {
-        this._handles[3].tracking = false;
-        this._handles[3].onEnd();
-      } else {
-        this._handles[3].tracking = false;
-      }
-      this._handles[3].selected = this._selected;
-
-      // Second Handle
-      if (this._dragged || !this._handles[1].tracking) {
-        this._handles[1].tracking = false;
-        this._handles[1].onEnd();
-      } else {
-        this._handles[1].tracking = false;
-      }
-      this._handles[1].selected = this._selected;
-
-      this._active = this._handles[0].active || this._handles[1].active || this._handles[2].active || this._handles[3].active;
-      this._dragged = false;
-      this.update();
-    };
-
-    _class.prototype.create = function create() {
-      this.createMesh();
-      this.createDOM();
-    };
-
-    _class.prototype.createMesh = function createMesh() {
-      // geometry
-      this._geometry = new three.Geometry();
-      this._geometry.vertices = [this._handles[0].worldPosition, this._handles[1].worldPosition, this._handles[2].worldPosition, this._handles[3].worldPosition];
-
-      // material
-      this._material = new three.LineBasicMaterial();
-
-      this.updateMeshColor();
-
-      // mesh
-      this._mesh = new three.LineSegments(this._geometry, this._material);
-      this._mesh.visible = true;
-      this.add(this._mesh);
-    };
-
-    _class.prototype.createDOM = function createDOM() {
-      this._line = document.createElement('div');
-      this._line.className = 'widgets-line';
-      this._container.appendChild(this._line);
-
-      this._label = document.createElement('div');
-      this._label.className = 'widgets-label';
-      this._container.appendChild(this._label);
-
-      this._line2 = document.createElement('div');
-      this._line2.className = 'widgets-line';
-      this._container.appendChild(this._line2);
-
-      this._label2 = document.createElement('div');
-      this._label2.className = 'widgets-label';
-      this._container.appendChild(this._label2);
-
-      this._dashline = document.createElement('div');
-      this._dashline.className = 'widgets-dashline';
-      this._container.appendChild(this._dashline);
-
-      this.updateDOMColor();
-    };
-
-    _class.prototype.hideDOM = function hideDOM() {
-      this._line.style.display = 'none';
-      this._label.style.display = 'none';
-      this._line2.style.display = 'none';
-      this._label2.style.display = 'none';
-      this._dashline.style.display = 'none';
-
-      this._handles.forEach(function (elem) {
-        return elem.hideDOM();
-      });
-    };
-
-    _class.prototype.showDOM = function showDOM() {
-      this._line.style.display = '';
-      this._label.style.display = '';
-      this._line2.style.display = '';
-      this._label2.style.display = '';
-      this._dashline.style.display = '';
-
-      this._handles.forEach(function (elem) {
-        return elem.showDOM();
-      });
-    };
-
-    _class.prototype.update = function update() {
-      this.updateColor();
-
-      this._handles.forEach(function (elem) {
-        return elem.update();
-      });
-
-      this.updateMeshColor();
-      this.updateMeshPosition();
-
-      this.updateDOM();
-    };
-
-    _class.prototype.updateMeshColor = function updateMeshColor() {
-      if (this._material) {
-        this._material.color.set(this._color);
-      }
-    };
-
-    _class.prototype.updateMeshPosition = function updateMeshPosition() {
-      if (this._geometry) {
-        this._geometry.verticesNeedUpdate = true;
-      }
-    };
-
-    _class.prototype.updateDOM = function updateDOM() {
-      this.updateDOMColor();
-
-      // update first line
-      var lineData = this.getLineData(this._handles[0].screenPosition, this._handles[1].screenPosition);
-
-      this._line.style.transform = 'translate3D(' + lineData.transformX + 'px, ' + lineData.transformY + 'px, 0)\n                rotate(' + lineData.transformAngle + 'rad)';
-      this._line.style.width = lineData.length + 'px';
-
-      // update second line
-      var line2Data = this.getLineData(this._handles[2].screenPosition, this._handles[3].screenPosition);
-
-      this._line2.style.transform = 'translate3D(' + line2Data.transformX + 'px, ' + line2Data.transformY + 'px, 0)\n                rotate(' + line2Data.transformAngle + 'rad)';
-      this._line2.style.width = line2Data.length + 'px';
-
-      // update dash line
-      var line1Center = this._handles[0].worldPosition.clone().add(this._handles[1].worldPosition).multiplyScalar(0.5);
-      var line2Center = this._handles[2].worldPosition.clone().add(this._handles[3].worldPosition).multiplyScalar(0.5);
-      var dashLineData = this.getLineData(this.worldToScreen(line1Center), this.worldToScreen(line2Center));
-
-      this._dashline.style.transform = 'translate3D(' + dashLineData.transformX + 'px, ' + dashLineData.transformY + 'px, 0)\n                rotate(' + dashLineData.transformAngle + 'rad)';
-      this._dashline.style.width = dashLineData.length + 'px';
-
-      // update labels
-      var distanceData = this.getDistanceData(this._handles[0].worldPosition, this._handles[1].worldPosition, this._calibrationFactor);
-      var distanceData2 = this.getDistanceData(this._handles[2].worldPosition, this._handles[3].worldPosition, this._calibrationFactor);
-      var title = 'Calibration is required to display the distance in mm';
-
-      this._distance = distanceData.distance;
-      this._distance2 = distanceData2.distance;
-      if (distanceData.units && distanceData2.units && distanceData.units === distanceData2.units) {
-        this._units = distanceData.units;
-      } else {
-        if (!distanceData.units) {
-          distanceData.units = this._units;
-        }
-        if (!distanceData2.units) {
-          distanceData2.units = this._units;
-        }
-      }
-
-      if (distanceData.units === 'units' && !this._label.hasAttribute('title')) {
-        this._label.setAttribute('title', title);
-        this._label.style.color = this._colors.error;
-      } else if (distanceData.units !== 'units' && this._label.hasAttribute('title')) {
-        this._label.removeAttribute('title');
-        this._label.style.color = this._colors.text;
-      }
-      if (distanceData2.units === 'units' && !this._label2.hasAttribute('title')) {
-        this._label2.setAttribute('title', title);
-        this._label2.style.color = this._colors.error;
-      } else if (distanceData2.units !== 'units' && this._label2.hasAttribute('title')) {
-        this._label2.removeAttribute('title');
-        this._label2.style.color = this._colors.text;
-      }
-      this._label.innerHTML = this._distance.toFixed(2) + ' ' + distanceData.units;
-      this._label2.innerHTML = this._distance2.toFixed(2) + ' ' + distanceData2.units;
-
-      var angle = Math.abs(lineData.transformAngle);
-      if (angle > Math.PI / 2) {
-        angle = Math.PI - angle;
-      }
-
-      var labelPadding = Math.tan(angle) < this._label.offsetHeight / this._label.offsetWidth ? this._label.offsetWidth / 2 / Math.cos(angle) + 15 // 5px for each handle + padding
-      : this._label.offsetHeight / 2 / Math.cos(Math.PI / 2 - angle) + 15;
-      var paddingVector = lineData.line.normalize().multiplyScalar(labelPadding);
-      var paddingPoint = lineData.length > labelPadding * 2 ? this._handles[1].screenPosition.clone().sub(paddingVector) : this._handles[1].screenPosition.clone().add(paddingVector);
-      var transform = this.adjustLabelTransform(this._label, paddingPoint);
-
-      this._label.style.transform = 'translate3D(' + transform.x + 'px, ' + transform.y + 'px, 0)';
-
-      var angle2 = Math.abs(line2Data.transformAngle);
-      if (angle2 > Math.PI / 2) {
-        angle2 = Math.PI - angle2;
-      }
-
-      var label2Padding = Math.tan(angle2) < this._label2.offsetHeight / this._label2.offsetWidth ? this._label2.offsetWidth / 2 / Math.cos(angle2) + 15 // 5px for each handle + padding
-      : this._label2.offsetHeight / 2 / Math.cos(Math.PI / 2 - angle2) + 15;
-      var paddingVector2 = line2Data.line.normalize().multiplyScalar(label2Padding);
-      var paddingPoint2 = line2Data.length > label2Padding * 2 ? this._handles[3].screenPosition.clone().sub(paddingVector2) : this._handles[3].screenPosition.clone().add(paddingVector2);
-      var transform2 = this.adjustLabelTransform(this._label2, paddingPoint2);
-
-      this._label2.style.transform = 'translate3D(' + transform2.x + 'px, ' + transform2.y + 'px, 0)';
-    };
-
-    _class.prototype.updateDOMColor = function updateDOMColor() {
-      this._line.style.backgroundColor = this._color;
-      this._label.style.borderColor = this._color;
-
-      this._line2.style.backgroundColor = this._color;
-      this._label2.style.borderColor = this._color;
-
-      this._dashline.style.borderTop = '1.5px dashed ' + this._color;
-    };
-
-    _class.prototype.free = function free() {
-      var _this2 = this;
-
-      this.removeEventListeners();
-
-      this._handles.forEach(function (h) {
-        _this2.remove(h);
-        h.free();
-      });
-      this._handles = [];
-
-      this._container.removeChild(this._line);
-      this._container.removeChild(this._label);
-      this._container.removeChild(this._line2);
-      this._container.removeChild(this._label2);
-      this._container.removeChild(this._dashline);
-
-      // mesh, geometry, material
-      this.remove(this._mesh);
-      this._mesh.geometry.dispose();
-      this._mesh.geometry = null;
-      this._mesh.material.dispose();
-      this._mesh.material = null;
-      this._mesh = null;
-      this._geometry.dispose();
-      this._geometry = null;
-      this._material.vertexShader = null;
-      this._material.fragmentShader = null;
-      this._material.uniforms = null;
-      this._material.dispose();
-      this._material = null;
-
-      _Constructor.prototype.free.call(this);
-    };
-
-    /**
-     * Get length of rulers
-     *
-     * @return {Array}
-     */
-
-
-    _class.prototype.getDistances = function getDistances() {
-      return [this._distance, this._distance2];
-    };
-
-    _createClass(_class, [{
-      key: 'targetMesh',
-      get: function get() {
-        return this._targetMesh;
-      },
-      set: function set(targetMesh) {
-        this._targetMesh = targetMesh;
-        this._handles.forEach(function (elem) {
-          return elem.targetMesh = targetMesh;
-        });
-        this.update();
-      }
-    }, {
-      key: 'worldPosition',
-      get: function get() {
-        return this._worldPosition;
-      },
-      set: function set(worldPosition) {
-        this._handles.forEach(function (elem) {
-          return elem.worldPosition.copy(worldPosition);
-        });
-        this._worldPosition.copy(worldPosition);
-        this.update();
-      }
-    }, {
-      key: 'calibrationFactor',
-      get: function get() {
-        return this._calibrationFactor;
-      },
-      set: function set(calibrationFactor) {
-        this._calibrationFactor = calibrationFactor;
-        this._units = 'mm';
-        this.update();
-      }
-    }, {
-      key: 'shotestDistance',
-      get: function get() {
-        return this._distance < this._distance2 ? this._distance : this._distance2;
-      }
-    }, {
-      key: 'longestDistance',
-      get: function get() {
-        return this._distance > this._distance2 ? this._distance : this._distance2;
-      }
-    }]);
-
-    return _class;
-  }(Constructor);
-};
-
-
-/* harmony default export */ __webpack_exports__["default"] = (widgetsBiruler());
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.crossRuler.js":
-/*!*******************************************!*\
-  !*** ./src/widgets/widgets.crossRuler.js ***!
-  \*******************************************/
-/*! exports provided: widgetsCrossRuler, default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "widgetsCrossRuler", function() { return widgetsCrossRuler; });
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.base */ "./src/widgets/widgets.base.ts");
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_widgets_base__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _widgets_handle__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./widgets.handle */ "./src/widgets/widgets.handle.js");
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-
-
-
-/**
- * @module widgets/crossRuler
- */
-var widgetsCrossRuler = function widgetsCrossRuler() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = Object(_widgets_base__WEBPACK_IMPORTED_MODULE_0__["widgetsBase"])(three);
-  return function (_Constructor) {
-    _inherits(_class, _Constructor);
-
-    function _class(targetMesh, controls) {
-      var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-      _classCallCheck(this, _class);
-
-      var _this = _possibleConstructorReturn(this, _Constructor.call(this, targetMesh, controls, params));
-
-      _this._widgetType = 'CrossRuler';
-
-      // incoming parameters (optional: lps2IJK, pixelSpacing, ultrasoundRegions, worldPosition)
-      _this._calibrationFactor = params.calibrationFactor || null;
-
-      _this._distances = null; // from intersection point to handles
-      _this._line01 = null; // vector from 0 to 1st handle
-      _this._normal = null; // normal vector to line01
-
-      // outgoing values
-      _this._distance = null;
-      _this._distance2 = null;
-      _this._units = !_this._calibrationFactor && !params.pixelSpacing ? 'units' : 'mm';
-
-      _this._domHovered = false;
-      _this._moving = false;
-
-      // mesh stuff
-      _this._material = null;
-      _this._geometry = null;
-      _this._mesh = null;
-
-      // dom stuff
-      _this._line = null;
-      _this._line2 = null;
-      _this._label = null;
-      _this._label2 = null;
-
-      // add handles
-      _this._handles = [];
-
-      var handle = void 0;
-      var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-      for (var i = 0; i < 4; i++) {
-        handle = new WidgetsHandle(targetMesh, controls, params);
-        _this.add(handle);
-        _this._handles.push(handle);
-      }
-      _this._handles[1].active = true;
-      _this._handles[1].tracking = true;
-
-      _this._moveHandle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(_this._moveHandle);
-      _this._handles.push(_this._moveHandle);
-      _this._moveHandle.hide();
-
-      _this.onHover = _this.onHover.bind(_this);
-      _this.onMove = _this.onMove.bind(_this);
-
-      _this.create();
-
-      _this.addEventListeners();
-      return _this;
-    }
-
-    _class.prototype.addEventListeners = function addEventListeners() {
-      this._line.addEventListener('mouseenter', this.onHover);
-      this._line.addEventListener('mouseleave', this.onHover);
-      this._line2.addEventListener('mouseenter', this.onHover);
-      this._line2.addEventListener('mouseleave', this.onHover);
-
-      this._container.addEventListener('wheel', this.onMove);
-    };
-
-    _class.prototype.removeEventListeners = function removeEventListeners() {
-      this._line.removeEventListener('mouseenter', this.onHover);
-      this._line.removeEventListener('mouseleave', this.onHover);
-      this._line2.removeEventListener('mouseenter', this.onHover);
-      this._line2.removeEventListener('mouseleave', this.onHover);
-
-      this._container.removeEventListener('wheel', this.onMove);
-    };
-
-    _class.prototype.onHover = function onHover(evt) {
-      if (evt) {
-        this.hoverDom(evt);
-      }
-
-      this.hoverMesh();
-
-      this._hovered = this._handles[0].hovered || this._handles[1].hovered || this._handles[2].hovered || this._handles[3].hovered || this._domHovered;
-      this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-    };
-
-    _class.prototype.hoverMesh = function hoverMesh() {
-      // check raycast intersection, do we want to hover on mesh or just css?
-    };
-
-    _class.prototype.hoverDom = function hoverDom(evt) {
-      this._domHovered = evt.type === 'mouseenter';
-    };
-
-    _class.prototype.onStart = function onStart(evt) {
-      this._moveHandle.onMove(evt, true);
-
-      this._handles.slice(0, -1).forEach(function (elem) {
-        return elem.onStart(evt);
-      });
-
-      this._active = this._handles[0].active || this._handles[1].active || this._handles[2].active || this._handles[3].active || this._domHovered;
-
-      if (this._domHovered && this._distances) {
-        this._moving = true;
-        this._controls.enabled = false;
-      }
-
-      this.update();
-    };
-
-    _class.prototype.onMove = function onMove(evt) {
-      var _this2 = this;
-
-      if (this._active) {
-        var prevPosition = this._moveHandle.worldPosition.clone();
-
-        this._dragged = true;
-        this._moveHandle.onMove(evt, true);
-
-        if (this._moving) {
-          this._handles.slice(0, -1).forEach(function (handle) {
-            handle.worldPosition.add(_this2._moveHandle.worldPosition.clone().sub(prevPosition));
-          });
-        }
-      } else {
-        this.onHover(null);
-      }
-
-      this._handles.slice(0, -1).forEach(function (elem) {
-        return elem.onMove(evt);
-      });
-
-      if (this._distances) {
-        if (this._handles[0].active || this._handles[1].active) {
-          this.repositionOrtho(); // change worldPosition of 2nd and 3rd handle
-        } else if (this._handles[2].active || this._handles[3].active) {
-          this.recalculateOrtho();
-        }
-      }
-      this.update();
-    };
-
-    _class.prototype.onEnd = function onEnd() {
-      this._handles[0].onEnd();
-      this._handles[2].onEnd();
-      this._handles[3].onEnd();
-
-      if (this._handles[1].tracking && this._handles[0].screenPosition.distanceTo(this._handles[1].screenPosition) < 10) {
-        return;
-      }
-
-      if (!this._dragged && this._active && !this._handles[1].tracking) {
-        this._selected = !this._selected; // change state if there was no dragging
-        this._handles[0].selected = this._selected;
-        this._handles[2].selected = this._selected;
-        this._handles[3].selected = this._selected;
-      }
-
-      // Second Handle
-      if (this._dragged || !this._handles[1].tracking) {
-        this._handles[1].tracking = false;
-        this._handles[1].onEnd();
-      } else {
-        this._handles[1].tracking = false;
-      }
-      this._handles[1].selected = this._selected;
-
-      this._active = this._handles[0].active || this._handles[1].active || this._handles[2].active || this._handles[3].active;
-      this._dragged = false;
-      this._moving = false;
-
-      if (!this._distances) {
-        this.initOrtho();
-      }
-      this.update();
-    };
-
-    _class.prototype.create = function create() {
-      this.createMesh();
-      this.createDOM();
-    };
-
-    _class.prototype.createMesh = function createMesh() {
-      // geometry
-      this._geometry = new three.Geometry();
-      this._geometry.vertices = [this._handles[0].worldPosition, this._handles[1].worldPosition, this._handles[2].worldPosition, this._handles[3].worldPosition];
-
-      // material
-      this._material = new three.LineBasicMaterial();
-
-      this.updateMeshColor();
-
-      // mesh
-      this._mesh = new three.LineSegments(this._geometry, this._material);
-      this._mesh.visible = true;
-      this.add(this._mesh);
-    };
-
-    _class.prototype.createDOM = function createDOM() {
-      this._line = document.createElement('div');
-      this._line.className = 'widgets-line';
-      this._container.appendChild(this._line);
-
-      this._line2 = document.createElement('div');
-      this._line2.className = 'widgets-line';
-      this._container.appendChild(this._line2);
-
-      this._label = document.createElement('div');
-      this._label.className = 'widgets-label';
-      this._container.appendChild(this._label);
-
-      this._label2 = document.createElement('div');
-      this._label2.className = 'widgets-label';
-      this._container.appendChild(this._label2);
-
-      this.updateDOMColor();
-    };
-
-    _class.prototype.hideDOM = function hideDOM() {
-      this._line.style.display = 'none';
-      this._line2.style.display = 'none';
-      this._label.style.display = 'none';
-      this._label2.style.display = 'none';
-
-      this._handles.slice(0, -1).forEach(function (elem) {
-        return elem.hideDOM();
-      });
-    };
-
-    _class.prototype.showDOM = function showDOM() {
-      this._line.style.display = '';
-      this._line2.style.display = '';
-      this._label.style.display = '';
-      this._label2.style.display = '';
-
-      this._handles.slice(0, -1).forEach(function (elem) {
-        return elem.showDOM();
-      });
-    };
-
-    _class.prototype.update = function update() {
-      this.updateColor();
-
-      this._handles.slice(0, -1).forEach(function (elem) {
-        return elem.update();
-      });
-
-      this.updateMeshColor();
-      this.updateMeshPosition();
-
-      this.updateDOM();
-    };
-
-    _class.prototype.updateMeshColor = function updateMeshColor() {
-      if (this._material) {
-        this._material.color.set(this._color);
-      }
-    };
-
-    _class.prototype.updateMeshPosition = function updateMeshPosition() {
-      if (this._geometry) {
-        this._geometry.verticesNeedUpdate = true;
-      }
-    };
-
-    _class.prototype.updateDOM = function updateDOM() {
-      this.updateDOMColor();
-
-      // update first line
-      var lineData = this.getLineData(this._handles[0].screenPosition, this._handles[1].screenPosition);
-
-      this._line.style.transform = 'translate3D(' + lineData.transformX + 'px, ' + lineData.transformY + 'px, 0)\n            rotate(' + lineData.transformAngle + 'rad)';
-      this._line.style.width = lineData.length + 'px';
-
-      // update second line
-      var line2Data = this.getLineData(this._handles[2].screenPosition, this._handles[3].screenPosition);
-
-      this._line2.style.transform = 'translate3D(' + line2Data.transformX + 'px, ' + line2Data.transformY + 'px, 0)\n            rotate(' + line2Data.transformAngle + 'rad)';
-      this._line2.style.width = line2Data.length + 'px';
-
-      // update labels
-      var distanceData = this.getDistanceData(this._handles[0].worldPosition, this._handles[1].worldPosition, this._calibrationFactor);
-      var distanceData2 = this.getDistanceData(this._handles[2].worldPosition, this._handles[3].worldPosition, this._calibrationFactor);
-      var title = 'Calibration is required to display the distance in mm';
-
-      this._distance = distanceData.distance;
-      this._distance2 = distanceData2.distance;
-      if (distanceData.units && distanceData2.units && distanceData.units === distanceData2.units) {
-        this._units = distanceData.units;
-      } else {
-        if (!distanceData.units) {
-          distanceData.units = this._units;
-        }
-        if (!distanceData2.units) {
-          distanceData2.units = this._units;
-        }
-      }
-
-      if (distanceData.units === 'units' && !this._label.hasAttribute('title')) {
-        this._label.setAttribute('title', title);
-        this._label.style.color = this._colors.error;
-      } else if (distanceData.units !== 'units' && this._label.hasAttribute('title')) {
-        this._label.removeAttribute('title');
-        this._label.style.color = this._colors.text;
-      }
-      if (distanceData2.units === 'units' && !this._label2.hasAttribute('title')) {
-        this._label2.setAttribute('title', title);
-        this._label2.style.color = this._colors.error;
-      } else if (distanceData2.units !== 'units' && this._label2.hasAttribute('title')) {
-        this._label2.removeAttribute('title');
-        this._label2.style.color = this._colors.text;
-      }
-      this._label.innerHTML = this._distance.toFixed(2) + ' ' + distanceData.units;
-      this._label2.innerHTML = this._distance2.toFixed(2) + ' ' + distanceData2.units;
-
-      var angle = Math.abs(lineData.transformAngle);
-      if (angle > Math.PI / 2) {
-        angle = Math.PI - angle;
-      }
-
-      var labelPadding = Math.tan(angle) < this._label.offsetHeight / this._label.offsetWidth ? this._label.offsetWidth / 2 / Math.cos(angle) + 15 // 5px for each handle + padding
-      : this._label.offsetHeight / 2 / Math.cos(Math.PI / 2 - angle) + 15,
-          paddingVector = lineData.line.normalize().multiplyScalar(labelPadding),
-          paddingPoint = lineData.length > labelPadding * 4 ? this._handles[1].screenPosition.clone().sub(paddingVector) : this._handles[1].screenPosition.clone().add(paddingVector),
-          transform = this.adjustLabelTransform(this._label, paddingPoint);
-
-      this._label.style.transform = 'translate3D(' + transform.x + 'px, ' + transform.y + 'px, 0)';
-
-      var angle2 = Math.abs(line2Data.transformAngle);
-      if (angle2 > Math.PI / 2) {
-        angle2 = Math.PI - angle2;
-      }
-
-      var label2Padding = Math.tan(angle2) < this._label2.offsetHeight / this._label2.offsetWidth ? this._label2.offsetWidth / 2 / Math.cos(angle2) + 15 // 5px for each handle + padding
-      : this._label2.offsetHeight / 2 / Math.cos(Math.PI / 2 - angle2) + 15,
-          paddingVector2 = line2Data.line.normalize().multiplyScalar(label2Padding),
-          paddingPoint2 = line2Data.length > label2Padding * 4 ? this._handles[3].screenPosition.clone().sub(paddingVector2) : this._handles[3].screenPosition.clone().add(paddingVector2),
-          transform2 = this.adjustLabelTransform(this._label2, paddingPoint2);
-
-      this._label2.style.transform = 'translate3D(' + transform2.x + 'px, ' + transform2.y + 'px, 0)';
-    };
-
-    _class.prototype.updateDOMColor = function updateDOMColor() {
-      this._line.style.backgroundColor = this._color;
-      this._line2.style.backgroundColor = this._color;
-      this._label.style.borderColor = this._color;
-      this._label2.style.borderColor = this._color;
-    };
-
-    _class.prototype.free = function free() {
-      var _this3 = this;
-
-      this.removeEventListeners();
-
-      this._handles.forEach(function (h) {
-        _this3.remove(h);
-        h.free();
-      });
-      this._handles = [];
-
-      this._container.removeChild(this._line);
-      this._container.removeChild(this._line2);
-      this._container.removeChild(this._label);
-      this._container.removeChild(this._label2);
-
-      // mesh, geometry, material
-      this.remove(this._mesh);
-      this._mesh.geometry.dispose();
-      this._mesh.geometry = null;
-      this._mesh.material.dispose();
-      this._mesh.material = null;
-      this._mesh = null;
-      this._geometry.dispose();
-      this._geometry = null;
-      this._material.vertexShader = null;
-      this._material.fragmentShader = null;
-      this._material.uniforms = null;
-      this._material.dispose();
-      this._material = null;
-
-      _Constructor.prototype.free.call(this);
-    };
-
-    _class.prototype.initLineAndNormal = function initLineAndNormal() {
-      this._line01 = this._handles[1].worldPosition.clone().sub(this._handles[0].worldPosition);
-      this._normal = this._line01.clone().cross(this._camera._direction).normalize();
-    };
-
-    _class.prototype.initOrtho = function initOrtho() {
-      // called onEnd if distances are null
-      this.initLineAndNormal();
-
-      var center = this._handles[1].worldPosition.clone().add(this._handles[0].worldPosition).multiplyScalar(0.5);
-      var halfLength = this._line01.length() / 2;
-      var normLine = this._normal.clone().multiplyScalar(halfLength * 0.8);
-      var normLength = normLine.length();
-
-      this._handles[2].worldPosition.copy(center.clone().add(normLine));
-      this._handles[3].worldPosition.copy(center.clone().sub(normLine));
-
-      this._distances = [halfLength, halfLength, normLength, normLength];
-    };
-
-    _class.prototype.repositionOrtho = function repositionOrtho() {
-      // called onMove if 0 or 1st handle is active
-      this.initLineAndNormal();
-      this._distances[0] *= this._line01.length() / (this._distances[0] + this._distances[1]);
-      this._distances[1] = this._line01.length() - this._distances[0];
-
-      var intersect = this._handles[0].worldPosition.clone().add(this._line01.clone().normalize().multiplyScalar(this._distances[0]));
-
-      this._handles[2].worldPosition.copy(intersect.clone().add(this._normal.clone().multiplyScalar(this._distances[2])));
-      this._handles[3].worldPosition.copy(intersect.clone().sub(this._normal.clone().multiplyScalar(this._distances[3])));
-    };
-
-    _class.prototype.recalculateOrtho = function recalculateOrtho() {
-      // called onMove if 2nd or 3rd handle is active
-      var activeInd = this._handles[2].active ? 2 : 3;
-      var lines = [];
-      var intersect = new three.Vector3();
-
-      lines[2] = this._handles[2].worldPosition.clone().sub(this._handles[0].worldPosition);
-      lines[3] = this._handles[3].worldPosition.clone().sub(this._handles[0].worldPosition);
-      new three.Ray(this._handles[0].worldPosition, this._line01.clone().normalize()).closestPointToPoint(this._handles[activeInd].worldPosition, intersect);
-
-      var isOutside = intersect.clone().sub(this._handles[0].worldPosition).length() > this._line01.length();
-      // if intersection is outside of the line01 then change worldPosition of active handle
-      if (isOutside || intersect.equals(this._handles[0].worldPosition)) {
-        if (isOutside) {
-          intersect.copy(this._handles[1].worldPosition);
-        }
-
-        this._handles[activeInd].worldPosition.copy(intersect.clone().add(lines[activeInd].clone().projectOnVector(this._normal)));
-      }
-
-      if (lines[2].cross(this._line01).angleTo(this._camera._direction) > 0.01) {
-        this._handles[2].worldPosition.copy(intersect); // 2nd handle should always be above line01
-      }
-      if (lines[3].cross(this._line01).angleTo(this._camera._direction) < Math.PI - 0.01) {
-        this._handles[3].worldPosition.copy(intersect); // 3nd handle should always be below line01
-      }
-
-      lines[0] = this._normal.clone().multiplyScalar(this._distances[5 - activeInd]);
-      if (activeInd === 2) {
-        lines[0].negate();
-      }
-      this._handles[5 - activeInd].worldPosition.copy(intersect.clone().add(lines[0]));
-
-      this._distances[activeInd] = intersect.distanceTo(this._handles[activeInd].worldPosition);
-      this._distances[0] = intersect.distanceTo(this._handles[0].worldPosition);
-      this._distances[1] = intersect.distanceTo(this._handles[1].worldPosition);
-    };
-
-    /**
-     * Get length of rulers
-     *
-     * @return {Array}
-     */
-
-
-    _class.prototype.getDimensions = function getDimensions() {
-      return [this._distance, this._distance2];
-    };
-
-    /**
-     * Get CrossRuler handles position
-     *
-     * @return {Array.<Vector3>} First begin, first end, second begin, second end
-     */
-
-
-    _class.prototype.getCoordinates = function getCoordinates() {
-      return [this._handles[0].worldPosition, this._handles[1].worldPosition, this._handles[2].worldPosition, this._handles[3].worldPosition];
-    };
-
-    /**
-     * Set CrossRuler handles position
-     *
-     * @param {Vector3} first   The beginning of the first line
-     * @param {Vector3} second  The end of the first line
-     * @param {Vector3} third   The beginning of the second line (clockwise relative to the first line)
-     * @param {Vector3} fourth  The end of the second line
-     */
-
-
-    _class.prototype.initCoordinates = function initCoordinates(first, second, third, fourth) {
-      var intersectR = new three.Vector3();
-      var intersectS = new three.Vector3();
-      var ray = new three.Ray(first);
-
-      ray.lookAt(second);
-      ray.distanceSqToSegment(third, fourth, intersectR, intersectS);
-
-      if (intersectR.distanceTo(intersectS) > 0.01 && intersectR.distanceTo(first) > second.distanceTo(first) + 0.01) {
-        window.console.warn('Lines do not intersect');
-
-        return;
-      }
-
-      this.active = false;
-      this.hovered = false;
-      this.setDefaultColor('#198');
-      this._worldPosition.copy(first);
-      this._handles[0].worldPosition.copy(first);
-      this._handles[1].worldPosition.copy(second);
-      this._handles[1].active = false;
-      this._handles[1].tracking = false;
-      this._handles[2].worldPosition.copy(third);
-      this._handles[3].worldPosition.copy(fourth);
-      this._distances = [intersectR.distanceTo(first), intersectR.distanceTo(second), intersectR.distanceTo(third), intersectR.distanceTo(fourth)];
-
-      this.initLineAndNormal();
-      this.update();
-    };
-
-    _createClass(_class, [{
-      key: 'targetMesh',
-      get: function get() {
-        return this._targetMesh;
-      },
-      set: function set(targetMesh) {
-        this._targetMesh = targetMesh;
-        this._handles.forEach(function (elem) {
-          return elem.targetMesh = targetMesh;
-        });
-        this.update();
-      }
-    }, {
-      key: 'worldPosition',
-      get: function get() {
-        return this._worldPosition;
-      },
-      set: function set(worldPosition) {
-        this._handles.slice(0, -1).forEach(function (elem) {
-          return elem.worldPosition.copy(worldPosition);
-        });
-        this._worldPosition.copy(worldPosition);
-        this.update();
-      }
-    }, {
-      key: 'calibrationFactor',
-      get: function get() {
-        return this._calibrationFactor;
-      },
-      set: function set(calibrationFactor) {
-        this._calibrationFactor = calibrationFactor;
-        this._units = 'mm';
-        this.update();
-      }
-    }]);
-
-    return _class;
-  }(Constructor);
-};
-
-
-/* harmony default export */ __webpack_exports__["default"] = (widgetsCrossRuler());
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.css.js":
-/*!************************************!*\
-  !*** ./src/widgets/widgets.css.js ***!
-  \************************************/
-/*! exports provided: default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-/**
- * @module CSS Code for all Widgets
- */
-var WidgetsCss = function () {
-    function WidgetsCss() {
-        _classCallCheck(this, WidgetsCss);
-    }
-
-    _createClass(WidgetsCss, null, [{
-        key: "code",
-        get: function get() {
-            return "\n        .widgets-handle {\n            position: absolute;\n            border: 1px solid;\n            border-radius: 50%;\n            width: 10px;\n            height: 10px;\n            margin: -6px; /* border + width / 2 */\n            z-index: 3;\n        }\n        .widgets-line {\n            position: absolute;\n            width: 1px;\n            height: 1px;\n            margin-top: -0.5px; /* height / 2 */\n        }\n        .widgets-dashline {\n            position: absolute;\n            border-top: 1px dashed;\n            margin-top: -0.5px; /* border / 2 */\n        }\n        .widgets-line:before,\n        .widgets-dashline:before { /* for dragging */\n            content: \" \";\n            position: absolute;\n            height: 12px;\n            left: 0;\n            right: 0;\n            margin-top: -6px;\n        }\n        .widgets-rectangle {\n            position: absolute;\n            border: 1px solid;\n            margin: -1px; /* border */\n        }\n        .widgets-rectangle-helper {\n            position: absolute;\n            border: 1px dashed;\n            margin: -1px; /* border */\n        }\n        .widgets-ellipse {\n            position: absolute;\n            border: 1px solid;\n            border-radius: 50%;\n            margin: -1px; /* border */\n            z-index: 2;\n        }\n        .widgets-label {\n            position: absolute;\n            border: 1px solid;\n            background-color: rgba(0, 0, 0, 0.7);\n            color: rgb(255, 255, 255);\n            padding: 4px;\n            z-index: 3;\n        }\n        ";
-        }
-    }]);
-
-    return WidgetsCss;
-}();
-
-/* harmony default export */ __webpack_exports__["default"] = (WidgetsCss);
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.ellipse.js":
-/*!****************************************!*\
-  !*** ./src/widgets/widgets.ellipse.js ***!
-  \****************************************/
-/*! exports provided: widgetsEllipse, default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "widgetsEllipse", function() { return widgetsEllipse; });
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.base */ "./src/widgets/widgets.base.ts");
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_widgets_base__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _widgets_handle__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./widgets.handle */ "./src/widgets/widgets.handle.js");
-/* harmony import */ var _core_core_utils__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../core/core.utils */ "./src/core/core.utils.js");
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-
-
-
-
-/**
- * @module widgets/ellipse
- */
-var widgetsEllipse = function widgetsEllipse() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = Object(_widgets_base__WEBPACK_IMPORTED_MODULE_0__["widgetsBase"])(three);
-  return function (_Constructor) {
-    _inherits(_class, _Constructor);
-
-    function _class(targetMesh, controls) {
-      var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-      _classCallCheck(this, _class);
-
-      var _this = _possibleConstructorReturn(this, _Constructor.call(this, targetMesh, controls, params));
-
-      _this._widgetType = 'Ellipse';
-
-      // incoming parameters (optional: frameIndex, worldPosition)
-      _this._stack = params.stack; // required
-      _this._calibrationFactor = params.calibrationFactor || null;
-
-      // outgoing values
-      _this._area = null;
-      _this._units = !_this._calibrationFactor && !params.stack.frame[params.frameIndex].pixelSpacing ? 'units' : 'cm²';
-
-      _this._moving = false;
-      _this._domHovered = false;
-
-      // mesh stuff
-      _this._material = null;
-      _this._geometry = null;
-      _this._mesh = null;
-
-      // dom stuff
-      _this._rectangle = null;
-      _this._ellipse = null;
-      _this._label = null;
-
-      // add handles
-      _this._handles = [];
-
-      var handle = void 0;
-      var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-      for (var i = 0; i < 2; i++) {
-        handle = new WidgetsHandle(targetMesh, controls, params);
-        _this.add(handle);
-        _this._handles.push(handle);
-      }
-      _this._handles[1].active = true;
-      _this._handles[1].tracking = true;
-
-      _this._moveHandle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(_this._moveHandle);
-      _this._handles.push(_this._moveHandle);
-      _this._moveHandle.hide();
-
-      _this.create();
-
-      _this.onMove = _this.onMove.bind(_this);
-      _this.onHover = _this.onHover.bind(_this);
-      _this.addEventListeners();
-      return _this;
-    }
-
-    _class.prototype.addEventListeners = function addEventListeners() {
-      this._container.addEventListener('wheel', this.onMove);
-
-      this._rectangle.addEventListener('mouseenter', this.onHover);
-      this._rectangle.addEventListener('mouseleave', this.onHover);
-      this._ellipse.addEventListener('mouseenter', this.onHover);
-      this._ellipse.addEventListener('mouseleave', this.onHover);
-      this._label.addEventListener('mouseenter', this.onHover);
-      this._label.addEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.removeEventListeners = function removeEventListeners() {
-      this._container.removeEventListener('wheel', this.onMove);
-
-      this._rectangle.removeEventListener('mouseenter', this.onHover);
-      this._rectangle.removeEventListener('mouseleave', this.onHover);
-      this._ellipse.removeEventListener('mouseenter', this.onHover);
-      this._ellipse.removeEventListener('mouseleave', this.onHover);
-      this._label.removeEventListener('mouseenter', this.onHover);
-      this._label.removeEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.onHover = function onHover(evt) {
-      if (evt) {
-        this.hoverDom(evt);
-      }
-
-      this.hoverMesh();
-
-      this._hovered = this._handles[0].hovered || this._handles[1].hovered || this._domHovered;
-      this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-    };
-
-    _class.prototype.hoverMesh = function hoverMesh() {
-      // check raycast intersection, if we want to hover on mesh instead of just css
-    };
-
-    _class.prototype.hoverDom = function hoverDom(evt) {
-      this._domHovered = evt.type === 'mouseenter';
-    };
-
-    _class.prototype.onStart = function onStart(evt) {
-      this._moveHandle.onMove(evt, true);
-
-      this._handles[0].onStart(evt);
-      this._handles[1].onStart(evt);
-
-      this._active = this._handles[0].active || this._handles[1].active || this._domHovered;
-
-      if (this._domHovered && !this._handles[1].tracking) {
-        this._moving = true;
-        this._controls.enabled = false;
-      }
-
-      this.update();
-    };
-
-    _class.prototype.onMove = function onMove(evt) {
-      var _this2 = this;
-
-      if (this._active) {
-        var prevPosition = this._moveHandle.worldPosition.clone();
-
-        this._dragged = true;
-        this._moveHandle.onMove(evt, true);
-
-        if (this._moving) {
-          this._handles.slice(0, -1).forEach(function (handle) {
-            handle.worldPosition.add(_this2._moveHandle.worldPosition.clone().sub(prevPosition));
-          });
-        }
-
-        this.updateRoI(true);
-      } else {
-        this.onHover(null);
-      }
-
-      this._handles[0].onMove(evt);
-      this._handles[1].onMove(evt);
-
-      this.update();
-    };
-
-    _class.prototype.onEnd = function onEnd() {
-      this._handles[0].onEnd(); // First Handle
-
-      if (this._handles[1].tracking && this._handles[0].screenPosition.distanceTo(this._handles[1].screenPosition) < 10) {
-        return;
-      }
-
-      if (!this._dragged && this._active && !this._handles[1].tracking) {
-        this._selected = !this._selected; // change state if there was no dragging
-        this._handles[0].selected = this._selected;
-      }
-
-      // Second Handle
-      if (this._dragged || !this._handles[1].tracking) {
-        this._handles[1].tracking = false;
-        this._handles[1].onEnd();
-      } else {
-        this._handles[1].tracking = false;
-      }
-      this._handles[1].selected = this._selected;
-
-      this._active = this._handles[0].active || this._handles[1].active;
-      this._dragged = false;
-      this._moving = false;
-
-      this.updateRoI(); // TODO: if (this._dragged || !this._initialized)
-      this.update();
-    };
-
-    _class.prototype.hideDOM = function hideDOM() {
-      this._handles.forEach(function (elem) {
-        return elem.hideDOM();
-      });
-
-      this._rectangle.style.display = 'none';
-      this._ellipse.style.display = 'none';
-      this._label.style.display = 'none';
-    };
-
-    _class.prototype.showDOM = function showDOM() {
-      this._handles[0].showDOM();
-      this._handles[1].showDOM();
-
-      this._rectangle.style.display = '';
-      this._ellipse.style.display = '';
-      this._label.style.display = '';
-    };
-
-    _class.prototype.create = function create() {
-      this.createMaterial();
-      this.createDOM();
-    };
-
-    _class.prototype.createMaterial = function createMaterial() {
-      this._material = new three.MeshBasicMaterial();
-      this._material.transparent = true;
-      this._material.opacity = 0.2;
-    };
-
-    _class.prototype.createDOM = function createDOM() {
-      this._rectangle = document.createElement('div');
-      this._rectangle.className = 'widgets-rectangle-helper';
-      this._container.appendChild(this._rectangle);
-
-      this._ellipse = document.createElement('div');
-      this._ellipse.className = 'widgets-ellipse';
-      this._container.appendChild(this._ellipse);
-
-      this._label = document.createElement('div');
-      this._label.className = 'widgets-label';
-
-      // measurements
-      var measurementsContainer = document.createElement('div');
-      // Mean / SD
-      var meanSDContainer = document.createElement('div');
-      meanSDContainer.className = 'mean-sd';
-      measurementsContainer.appendChild(meanSDContainer);
-      // Max / Min
-      var maxMinContainer = document.createElement('div');
-      maxMinContainer.className = 'max-min';
-      measurementsContainer.appendChild(maxMinContainer);
-      // Area
-      var areaContainer = document.createElement('div');
-      areaContainer.className = 'area';
-      measurementsContainer.appendChild(areaContainer);
-
-      this._label.appendChild(measurementsContainer);
-
-      this._container.appendChild(this._label);
-
-      this.updateDOMColor();
-    };
-
-    _class.prototype.update = function update() {
-      this.updateColor();
-
-      this._handles[0].update();
-      this._handles[1].update();
-
-      this.updateMeshColor();
-      this.updateMeshPosition();
-
-      this.updateDOM();
-    };
-
-    _class.prototype.updateMeshColor = function updateMeshColor() {
-      if (this._material) {
-        this._material.color.set(this._color);
-      }
-    };
-
-    _class.prototype.updateMeshPosition = function updateMeshPosition() {
-      if (this._mesh) {
-        this.remove(this._mesh);
-      }
-
-      var vec01 = this._handles[1].worldPosition.clone().sub(this._handles[0].worldPosition);
-      var height = vec01.clone().projectOnVector(this._camera.up).length();
-      var width = vec01.clone().projectOnVector(this._camera._right).length();
-
-      if (width === 0 || height === 0) {
-        return;
-      }
-
-      this._geometry = new three.ShapeGeometry(new three.Shape(new three.EllipseCurve(0, 0, width / 2, height / 2, 0, 2 * Math.PI, false).getPoints(50)));
-
-      this._mesh = new three.Mesh(this._geometry, this._material);
-      this._mesh.position.copy(this._handles[0].worldPosition.clone().add(vec01.multiplyScalar(0.5)));
-      this._mesh.rotation.copy(this._camera.rotation);
-      this._mesh.visible = true;
-      this.add(this._mesh);
-    };
-
-    _class.prototype.updateRoI = function updateRoI(clear) {
-      if (!this._geometry) {
-        return;
-      }
-
-      var meanSDContainer = this._label.querySelector('.mean-sd');
-      var maxMinContainer = this._label.querySelector('.max-min');
-
-      if (clear) {
-        meanSDContainer.innerHTML = '';
-        maxMinContainer.innerHTML = '';
-
-        return;
-      }
-
-      var roi = _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].getRoI(this._mesh, this._camera, this._stack);
-
-      if (roi !== null) {
-        meanSDContainer.innerHTML = 'Mean: ' + roi.mean.toFixed(1) + ' / SD: ' + roi.sd.toFixed(1);
-        maxMinContainer.innerHTML = 'Max: ' + roi.max.toFixed() + ' / Min: ' + roi.min.toFixed();
-      } else {
-        meanSDContainer.innerHTML = '';
-        maxMinContainer.innerHTML = '';
-      }
-    };
-
-    _class.prototype.updateDOMColor = function updateDOMColor() {
-      this._rectangle.style.borderColor = this._color;
-      this._ellipse.style.borderColor = this._color;
-      this._label.style.borderColor = this._color;
-    };
-
-    _class.prototype.updateDOM = function updateDOM() {
-      if (!this._geometry) {
-        return;
-      }
-
-      this.updateDOMColor();
-
-      var regions = this._stack.frame[this._params.frameIndex].ultrasoundRegions || [];
-
-      this._area = _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].getGeometryArea(this._geometry);
-      if (this._calibrationFactor) {
-        this._area *= Math.pow(this._calibrationFactor, 2);
-      } else if (regions && regions.length > 0 && this._stack.lps2IJK) {
-        var region0 = this.getRegionByXY(regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(this._stack.lps2IJK, this._handles[0].worldPosition));
-        var region1 = this.getRegionByXY(regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(this._stack.lps2IJK, this._handles[1].worldPosition));
-
-        if (region0 !== null && region1 !== null && region0 === region1 && regions[region0].unitsX === 'cm' && regions[region0].unitsY === 'cm') {
-          this._area *= Math.pow(regions[region0].deltaX, 2);
-          this._units = 'cm²';
-        } else if (this._stack.frame[this._params.frameIndex].pixelSpacing) {
-          this._area /= 100;
-          this._units = 'cm²';
-        } else {
-          this._units = 'units';
-        }
-      } else if (this._units === 'cm²') {
-        this._area /= 100;
-      }
-
-      if (this._units === 'units' && !this._label.hasAttribute('title')) {
-        this._label.setAttribute('title', 'Calibration is required to display the area in cm²');
-        this._label.style.color = this._colors.error;
-      } else if (this._units !== 'units' && this._label.hasAttribute('title')) {
-        this._label.removeAttribute('title');
-        this._label.style.color = this._colors.text;
-      }
-      this._label.querySelector('.area').innerHTML = 'Area: ' + this._area.toFixed(2) + ' ' + this._units;
-
-      var rectData = this.getRectData(this._handles[0].screenPosition, this._handles[1].screenPosition);
-      var labelTransform = this.adjustLabelTransform(this._label, this._handles[1].screenPosition.clone().add(rectData.paddingVector.multiplyScalar(15 + this._label.offsetHeight / 2)));
-
-      // update rectangle
-      this._rectangle.style.transform = 'translate3D(' + rectData.transformX + 'px, ' + rectData.transformY + 'px, 0)';
-      this._rectangle.style.width = rectData.width + 'px';
-      this._rectangle.style.height = rectData.height + 'px';
-
-      // update ellipse
-      this._ellipse.style.transform = 'translate3D(' + rectData.transformX + 'px, ' + rectData.transformY + 'px, 0)';
-      this._ellipse.style.width = rectData.width + 'px';
-      this._ellipse.style.height = rectData.height + 'px';
-
-      // update label
-      this._label.style.transform = 'translate3D(' + labelTransform.x + 'px,' + labelTransform.y + 'px, 0)';
-    };
-
-    _class.prototype.free = function free() {
-      var _this3 = this;
-
-      this.removeEventListeners();
-
-      this._handles.forEach(function (h) {
-        _this3.remove(h);
-        h.free();
-      });
-      this._handles = [];
-
-      this._container.removeChild(this._rectangle);
-      this._container.removeChild(this._ellipse);
-      this._container.removeChild(this._label);
-
-      // mesh, geometry, material
-      if (this._mesh) {
-        this.remove(this._mesh);
-        this._mesh.geometry.dispose();
-        this._mesh.geometry = null;
-        this._mesh.material.dispose();
-        this._mesh.material = null;
-        this._mesh = null;
-      }
-      if (this._geometry) {
-        this._geometry.dispose();
-        this._geometry = null;
-      }
-      this._material.vertexShader = null;
-      this._material.fragmentShader = null;
-      this._material.uniforms = null;
-      this._material.dispose();
-      this._material = null;
-
-      this._stack = null;
-
-      _Constructor.prototype.free.call(this);
-    };
-
-    _class.prototype.getMeasurements = function getMeasurements() {
-      return {
-        area: this._area,
-        units: this._units
-      };
-    };
-
-    _createClass(_class, [{
-      key: 'targetMesh',
-      get: function get() {
-        return this._targetMesh;
-      },
-      set: function set(targetMesh) {
-        this._targetMesh = targetMesh;
-        this._handles.forEach(function (elem) {
-          return elem.targetMesh = targetMesh;
-        });
-        this.update();
-      }
-    }, {
-      key: 'worldPosition',
-      get: function get() {
-        return this._worldPosition;
-      },
-      set: function set(worldPosition) {
-        this._handles[0].worldPosition.copy(worldPosition);
-        this._handles[1].worldPosition.copy(worldPosition);
-        this._worldPosition.copy(worldPosition);
-        this.update();
-      }
-    }, {
-      key: 'calibrationFactor',
-      get: function get() {
-        return this._calibrationFactor;
-      },
-      set: function set(calibrationFactor) {
-        this._calibrationFactor = calibrationFactor;
-        this._units = 'cm²';
-        this.update();
-      }
-    }]);
-
-    return _class;
-  }(Constructor);
-};
-
-
-/* harmony default export */ __webpack_exports__["default"] = (widgetsEllipse());
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.freehand.js":
-/*!*****************************************!*\
-  !*** ./src/widgets/widgets.freehand.js ***!
-  \*****************************************/
-/*! exports provided: widgetsFreehand, default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "widgetsFreehand", function() { return widgetsFreehand; });
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.base */ "./src/widgets/widgets.base.ts");
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_widgets_base__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _widgets_handle__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./widgets.handle */ "./src/widgets/widgets.handle.js");
-/* harmony import */ var _core_core_utils__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../core/core.utils */ "./src/core/core.utils.js");
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-
-
-
-
-/**
- * @module widgets/freehand
- */
-var widgetsFreehand = function widgetsFreehand() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = Object(_widgets_base__WEBPACK_IMPORTED_MODULE_0__["widgetsBase"])(three);
-  return function (_Constructor) {
-    _inherits(_class, _Constructor);
-
-    function _class(targetMesh, controls) {
-      var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-      _classCallCheck(this, _class);
-
-      var _this = _possibleConstructorReturn(this, _Constructor.call(this, targetMesh, controls, params));
-
-      _this._widgetType = 'Freehand';
-
-      // incoming parameters (optional: frameIndex, worldPosition)
-      _this._stack = params.stack; // required
-      _this._calibrationFactor = params.calibrationFactor || null;
-
-      // outgoing values
-      _this._area = null;
-      _this._units = !_this._calibrationFactor && !params.stack.frame[params.frameIndex].pixelSpacing ? 'units' : 'cm²';
-
-      _this._initialized = false; // set to true onEnd if number of handles > 2
-      _this._moving = false;
-      _this._domHovered = false;
-
-      // mesh stuff
-      _this._material = null;
-      _this._geometry = null;
-      _this._mesh = null;
-
-      // dom stuff
-      _this._lines = [];
-      _this._label = null;
-
-      // add handles
-      _this._handles = [];
-      var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-
-      var handle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(handle);
-      _this._handles.push(handle);
-
-      _this._moveHandle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(_this._moveHandle);
-      _this._moveHandle.hide();
-
-      _this.onMove = _this.onMove.bind(_this);
-      _this.onHover = _this.onHover.bind(_this);
-
-      _this.create();
-
-      _this.addEventListeners();
-      return _this;
-    }
-
-    _class.prototype.addEventListeners = function addEventListeners() {
-      this._container.addEventListener('wheel', this.onMove);
-
-      this._label.addEventListener('mouseenter', this.onHover);
-      this._label.addEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.removeEventListeners = function removeEventListeners() {
-      this._container.removeEventListener('wheel', this.onMove);
-
-      this._label.removeEventListener('mouseenter', this.onHover);
-      this._label.removeEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.onHover = function onHover(evt) {
-      if (evt) {
-        this.hoverDom(evt);
-      }
-
-      this.hoverMesh();
-
-      var hovered = false;
-
-      this._handles.forEach(function (elem) {
-        return hovered = hovered || elem.hovered;
-      });
-
-      this._hovered = hovered || this._domHovered;
-      this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-    };
-
-    _class.prototype.hoverMesh = function hoverMesh() {
-      // check raycast intersection, if we want to hover on mesh instead of just css
-    };
-
-    _class.prototype.hoverDom = function hoverDom(evt) {
-      this._domHovered = evt.type === 'mouseenter';
-    };
-
-    _class.prototype.onStart = function onStart(evt) {
-      var active = false;
-
-      this._moveHandle.onMove(evt, true);
-      this._handles.forEach(function (elem) {
-        elem.onStart(evt);
-        active = active || elem.active;
-      });
-
-      this._active = active || this._domHovered;
-
-      if (this._domHovered && this._initialized) {
-        this._moving = true;
-        this._controls.enabled = false;
-      }
-
-      this.update();
-    };
-
-    _class.prototype.onMove = function onMove(evt) {
-      var _this2 = this;
-
-      var hovered = false;
-
-      if (this.active) {
-        this._dragged = true;
-
-        if (!this._initialized) {
-          this._handles[this._handles.length - 1].hovered = false;
-          this._handles[this._handles.length - 1].active = false;
-          this._handles[this._handles.length - 1].tracking = false;
-
-          var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-          var handle = new WidgetsHandle(this._targetMesh, this._controls, this._params);
-
-          handle.hovered = true;
-          handle.active = true;
-          handle.tracking = true;
-          this.add(handle);
-          this._handles.push(handle);
-
-          this.createLine();
-        } else {
-          var prevPosition = this._moveHandle.worldPosition.clone();
-
-          this._moveHandle.onMove(evt, true);
-          if (this._mesh) {
-            this.remove(this._mesh);
-          }
-          this.updateDOMContent(true);
-          if (this._moving) {
-            this._handles.forEach(function (handle) {
-              handle.worldPosition.add(_this2._moveHandle.worldPosition.clone().sub(prevPosition));
-            });
-          }
-        }
-      }
-
-      this._handles.forEach(function (elem) {
-        elem.onMove(evt);
-        hovered = hovered || elem.hovered;
-      });
-
-      this._hovered = hovered || this._domHovered;
-      this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-
-      if (this.active && this._handles.length > 2) {
-        this.pushPopHandle();
-      }
-
-      this.update();
-    };
-
-    _class.prototype.onEnd = function onEnd() {
-      var _this3 = this;
-
-      if (this._handles.length < 3) {
-        return;
-      }
-
-      var active = false;
-
-      this._handles.slice(0, -1).forEach(function (elem) {
-        elem.onEnd();
-        active = active || elem.active;
-      });
-
-      // Last Handle
-      if (this._dragged || !this._handles[this._handles.length - 1].tracking) {
-        this._handles[this._handles.length - 1].tracking = false;
-        this._handles[this._handles.length - 1].onEnd();
-      } else {
-        this._handles[this._handles.length - 1].tracking = false;
-      }
-
-      if (this._lines.length < this._handles.length) {
-        this.createLine();
-      }
-
-      if (this._dragged || !this._initialized) {
-        this.updateMesh();
-        this.updateDOMContent();
-      }
-
-      if (!this._dragged && this._active) {
-        this._selected = !this._selected; // change state if there was no dragging
-        this._handles.forEach(function (elem) {
-          return elem.selected = _this3._selected;
-        });
-      }
-      this._active = active || this._handles[this._handles.length - 1].active;
-      this._dragged = false;
-      this._moving = false;
-      this._initialized = true;
-
-      this.update();
-    };
-
-    _class.prototype.create = function create() {
-      this.createMaterial();
-      this.createDOM();
-    };
-
-    _class.prototype.createMaterial = function createMaterial() {
-      this._material = new three.MeshBasicMaterial({ side: three.DoubleSide });
-      this._material.transparent = true;
-      this._material.opacity = 0.2;
-    };
-
-    _class.prototype.createDOM = function createDOM() {
-      this._label = document.createElement('div');
-      this._label.className = 'widgets-label';
-
-      // measurements
-      var measurementsContainer = document.createElement('div');
-      // Mean / SD
-      var meanSDContainer = document.createElement('div');
-      meanSDContainer.className = 'mean-sd';
-      measurementsContainer.appendChild(meanSDContainer);
-      // Max / Min
-      var maxMinContainer = document.createElement('div');
-      maxMinContainer.className = 'max-min';
-      measurementsContainer.appendChild(maxMinContainer);
-      // Area
-      var areaContainer = document.createElement('div');
-      areaContainer.className = 'area';
-      measurementsContainer.appendChild(areaContainer);
-
-      this._label.appendChild(measurementsContainer);
-
-      this._container.appendChild(this._label);
-
-      this.updateDOMColor();
-    };
-
-    _class.prototype.createLine = function createLine() {
-      var line = document.createElement('div');
-
-      line.className = 'widgets-line';
-      line.addEventListener('mouseenter', this.onHover);
-      line.addEventListener('mouseleave', this.onHover);
-      this._lines.push(line);
-      this._container.appendChild(line);
-    };
-
-    _class.prototype.hideDOM = function hideDOM() {
-      this._handles.forEach(function (elem) {
-        return elem.hideDOM();
-      });
-
-      this._lines.forEach(function (elem) {
-        return elem.style.display = 'none';
-      });
-      this._label.style.display = 'none';
-    };
-
-    _class.prototype.showDOM = function showDOM() {
-      this._handles.forEach(function (elem) {
-        return elem.showDOM();
-      });
-
-      this._lines.forEach(function (elem) {
-        return elem.style.display = '';
-      });
-      this._label.style.display = '';
-    };
-
-    _class.prototype.update = function update() {
-      this.updateColor();
-
-      // update handles
-      this._handles.forEach(function (elem) {
-        return elem.update();
-      });
-
-      // mesh stuff
-      this.updateMeshColor();
-      this.updateMeshPosition();
-
-      // DOM stuff
-      this.updateDOMColor();
-      this.updateDOMPosition();
-    };
-
-    _class.prototype.updateMesh = function updateMesh() {
-      if (this._mesh) {
-        this.remove(this._mesh);
-      }
-
-      var points = [];
-
-      this._handles.forEach(function (elem) {
-        return points.push(elem.worldPosition);
-      });
-
-      var center = _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].centerOfMass(points);
-      // direction from first point to center
-      var referenceDirection = new three.Vector3().subVectors(points[0], center).normalize();
-      var direction = new three.Vector3().crossVectors(new three.Vector3().subVectors(points[0], center), // side 1
-      new three.Vector3().subVectors(points[1], center) // side 2
-      );
-      var base = new three.Vector3().crossVectors(referenceDirection, direction).normalize();
-      var orderedpoints = [];
-
-      // other lines // if inter, return location + angle
-      for (var j = 0; j < points.length; j++) {
-        var point = new three.Vector3(points[j].x, points[j].y, points[j].z);
-        point.direction = new three.Vector3().subVectors(points[j], center).normalize();
-
-        var x = referenceDirection.dot(point.direction);
-        var y = base.dot(point.direction);
-        point.xy = { x: x, y: y };
-        point.angle = Math.atan2(y, x) * (180 / Math.PI);
-
-        orderedpoints.push(point);
-      }
-
-      // override to catch console.warn "THREE.ShapeUtils: Unable to triangulate polygon! in triangulate()"
-      this._shapeWarn = false;
-      var oldWarn = console.warn;
-      console.warn = function () {
-        for (var _len = arguments.length, rest = Array(_len), _key = 0; _key < _len; _key++) {
-          rest[_key] = arguments[_key];
-        }
-
-        if (rest[0] === 'three.ShapeUtils: Unable to triangulate polygon! in triangulate()') {
-          this._shapeWarn = true;
-        }
-        return oldWarn.apply(console, rest);
-      }.bind(this);
-
-      // create the shape
-      var shape = new three.Shape();
-      // move to first point!
-      shape.moveTo(orderedpoints[0].xy.x, orderedpoints[0].xy.y);
-
-      // loop through all points!
-      for (var l = 1; l < orderedpoints.length; l++) {
-        // project each on plane!
-        shape.lineTo(orderedpoints[l].xy.x, orderedpoints[l].xy.y);
-      }
-
-      // close the shape!
-      shape.lineTo(orderedpoints[0].xy.x, orderedpoints[0].xy.y);
-
-      this._geometry = new three.ShapeGeometry(shape);
-
-      console.warn = oldWarn;
-
-      this._geometry.vertices = orderedpoints;
-      this._geometry.verticesNeedUpdate = true;
-      this._geometry.elementsNeedUpdate = true;
-
-      this.updateMeshColor();
-
-      this._mesh = new three.Mesh(this._geometry, this._material);
-      this._mesh.visible = true;
-      this.add(this._mesh);
-    };
-
-    _class.prototype.updateMeshColor = function updateMeshColor() {
-      if (this._material) {
-        this._material.color.set(this._color);
-      }
-    };
-
-    _class.prototype.updateMeshPosition = function updateMeshPosition() {
-      if (this._geometry) {
-        this._geometry.verticesNeedUpdate = true;
-      }
-    };
-
-    _class.prototype.isPointOnLine = function isPointOnLine(pointA, pointB, pointToCheck) {
-      var c = new three.Vector3();
-      c.crossVectors(pointA.clone().sub(pointToCheck), pointB.clone().sub(pointToCheck));
-      return !c.length();
-    };
-
-    _class.prototype.pushPopHandle = function pushPopHandle() {
-      var handle0 = this._handles[this._handles.length - 3];
-      var handle1 = this._handles[this._handles.length - 2];
-      var newhandle = this._handles[this._handles.length - 1];
-
-      var isOnLine = this.isPointOnLine(handle0.worldPosition, handle1.worldPosition, newhandle.worldPosition);
-
-      if (isOnLine || handle0.screenPosition.distanceTo(newhandle.screenPosition) < 25) {
-        this.remove(handle1);
-        handle1.free();
-
-        this._handles[this._handles.length - 2] = newhandle;
-        this._handles.pop();
-
-        this._container.removeChild(this._lines.pop());
-      }
-
-      return isOnLine;
-    };
-
-    _class.prototype.updateDOMColor = function updateDOMColor() {
-      var _this4 = this;
-
-      if (this._handles.length >= 2) {
-        this._lines.forEach(function (elem) {
-          return elem.style.backgroundColor = _this4._color;
-        });
-      }
-      this._label.style.borderColor = this._color;
-    };
-
-    _class.prototype.updateDOMContent = function updateDOMContent(clear) {
-      var _this5 = this;
-
-      var meanSDContainer = this._label.querySelector('.mean-sd');
-      var maxMinContainer = this._label.querySelector('.max-min');
-      var areaContainer = this._label.querySelector('.area');
-
-      if (clear) {
-        meanSDContainer.innerHTML = '';
-        maxMinContainer.innerHTML = '';
-        areaContainer.innerHTML = '';
-
-        return;
-      }
-
-      var regions = this._stack.frame[this._params.frameIndex].ultrasoundRegions || [];
-
-      this._area = _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].getGeometryArea(this._geometry); // this.getArea result is changed on dragging
-      if (this._calibrationFactor) {
-        this._area *= Math.pow(this._calibrationFactor, 2);
-      } else if (regions && regions.length > 0 && this._stack.lps2IJK) {
-        var same = true;
-        var cRegion = void 0;
-        var pRegion = void 0;
-
-        this._handles.forEach(function (elem) {
-          cRegion = _this5.getRegionByXY(regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(_this5._stack.lps2IJK, elem.worldPosition));
-          if (cRegion === null || regions[cRegion].unitsX !== 'cm' || pRegion !== undefined && pRegion !== cRegion) {
-            same = false;
-          }
-          pRegion = cRegion;
-        });
-
-        if (same) {
-          this._area *= Math.pow(regions[cRegion].deltaX, 2);
-          this._units = 'cm²';
-        } else if (this._stack.frame[this._params.frameIndex].pixelSpacing) {
-          this._area /= 100;
-          this._units = 'cm²';
-        } else {
-          this._units = 'units';
-        }
-      } else if (this._units === 'cm²') {
-        this._area /= 100;
-      }
-
-      var title = this._units === 'units' ? 'Calibration is required to display the area in cm². ' : '';
-
-      if (this._shapeWarn) {
-        title += 'Values may be incorrect due to triangulation error.';
-      }
-      if (title !== '' && !this._label.hasAttribute('title')) {
-        this._label.setAttribute('title', title);
-        this._label.style.color = this._colors.error;
-      } else if (title === '' && this._label.hasAttribute('title')) {
-        this._label.removeAttribute('title');
-        this._label.style.color = this._colors.text;
-      }
-
-      var roi = _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].getRoI(this._mesh, this._camera, this._stack);
-
-      if (roi !== null) {
-        meanSDContainer.innerHTML = 'Mean: ' + roi.mean.toFixed(1) + ' / SD: ' + roi.sd.toFixed(1);
-        maxMinContainer.innerHTML = 'Max: ' + roi.max.toFixed() + ' / Min: ' + roi.min.toFixed();
-      } else {
-        meanSDContainer.innerHTML = '';
-        maxMinContainer.innerHTML = '';
-      }
-      areaContainer.innerHTML = 'Area: ' + this._area.toFixed(2) + ' ' + this._units;
-    };
-
-    _class.prototype.updateDOMPosition = function updateDOMPosition() {
-      var _this6 = this;
-
-      if (this._handles.length < 2) {
-        return;
-      }
-      // update lines and get coordinates of lowest handle
-      var labelPosition = null;
-
-      this._lines.forEach(function (elem, ind) {
-        var lineData = _this6.getLineData(_this6._handles[ind].screenPosition, _this6._handles[ind + 1 === _this6._handles.length ? 0 : ind + 1].screenPosition);
-
-        elem.style.transform = 'translate3D(' + lineData.transformX + 'px, ' + lineData.transformY + 'px, 0)\n                rotate(' + lineData.transformAngle + 'rad)';
-        elem.style.width = lineData.length + 'px';
-
-        if (labelPosition === null || labelPosition.y < _this6._handles[ind].screenPosition.y) {
-          labelPosition = _this6._handles[ind].screenPosition.clone();
-        }
-      });
-
-      if (!this._initialized) {
-        return;
-      }
-
-      // update label
-      labelPosition.y += 15 + this._label.offsetHeight / 2;
-      labelPosition = this.adjustLabelTransform(this._label, labelPosition);
-
-      this._label.style.transform = 'translate3D(' + labelPosition.x + 'px, ' + labelPosition.y + 'px, 0)';
-    };
-
-    _class.prototype.free = function free() {
-      var _this7 = this;
-
-      this.removeEventListeners();
-
-      this._handles.forEach(function (h) {
-        _this7.remove(h);
-        h.free();
-      });
-      this._handles = [];
-
-      this.remove(this._moveHandle);
-      this._moveHandle.free();
-      this._moveHandle = null;
-
-      this._lines.forEach(function (elem) {
-        elem.removeEventListener('mouseenter', _this7.onHover);
-        elem.removeEventListener('mouseleave', _this7.onHover);
-        _this7._container.removeChild(elem);
-      });
-      this._lines = [];
-      this._container.removeChild(this._label);
-
-      // mesh, geometry, material
-      if (this._mesh) {
-        this.remove(this._mesh);
-        this._mesh.geometry.dispose();
-        this._mesh.geometry = null;
-        this._mesh.material.dispose();
-        this._mesh.material = null;
-        this._mesh = null;
-      }
-      if (this._geometry) {
-        this._geometry.dispose();
-        this._geometry = null;
-      }
-      this._material.vertexShader = null;
-      this._material.fragmentShader = null;
-      this._material.uniforms = null;
-      this._material.dispose();
-      this._material = null;
-
-      this._stack = null;
-
-      _Constructor.prototype.free.call(this);
-    };
-
-    _class.prototype.getMeasurements = function getMeasurements() {
-      return {
-        area: this._area,
-        units: this._units
-      };
-    };
-
-    _createClass(_class, [{
-      key: 'targetMesh',
-      get: function get() {
-        return this._targetMesh;
-      },
-      set: function set(targetMesh) {
-        this._targetMesh = targetMesh;
-        this._handles.forEach(function (elem) {
-          return elem.targetMesh = targetMesh;
-        });
-        this._moveHandle.targetMesh = targetMesh;
-        this.update();
-      }
-    }, {
-      key: 'worldPosition',
-      get: function get() {
-        return this._worldPosition;
-      },
-      set: function set(worldPosition) {
-        this._handles.forEach(function (elem) {
-          return elem._worldPosition.copy(worldPosition);
-        });
-        this._worldPosition.copy(worldPosition);
-        this.update();
-      }
-    }, {
-      key: 'calibrationFactor',
-      get: function get() {
-        return this._calibrationFactor;
-      },
-      set: function set(calibrationFactor) {
-        this._calibrationFactor = calibrationFactor;
-        this._units = 'cm²';
-        this.update();
-      }
-    }]);
-
-    return _class;
-  }(Constructor);
-};
-
-
-/* harmony default export */ __webpack_exports__["default"] = (widgetsFreehand());
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.handle.js":
-/*!***************************************!*\
-  !*** ./src/widgets/widgets.handle.js ***!
-  \***************************************/
-/*! exports provided: widgetsHandle, default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "widgetsHandle", function() { return widgetsHandle; });
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.base */ "./src/widgets/widgets.base.ts");
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_widgets_base__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _core_core_intersections__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../core/core.intersections */ "./src/core/core.intersections.js");
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-
-
-
-/**
- * @module widgets/handle
- */
-var widgetsHandle = function widgetsHandle() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = Object(_widgets_base__WEBPACK_IMPORTED_MODULE_0__["widgetsBase"])(three);
-  return function (_Constructor) {
-    _inherits(_class, _Constructor);
-
-    function _class(targetMesh, controls) {
-      var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-      _classCallCheck(this, _class);
-
-      var _this = _possibleConstructorReturn(this, _Constructor.call(this, targetMesh, controls, params));
-
-      _this._widgetType = 'Handle';
-
-      // incoming parameters (optional: worldPosition)
-      if (params.hideHandleMesh === true) {
-        _this.visible = false;
-      }
-
-      // if no target mesh, use plane for FREE dragging.
-      _this._plane = {
-        position: new three.Vector3(),
-        direction: new three.Vector3()
-      };
-      _this._offset = new three.Vector3();
-      _this._raycaster = new three.Raycaster();
-
-      _this._active = false;
-      _this._hovered = false;
-      _this._tracking = false;
-
-      _this._mouse = new three.Vector2();
-
-      _this._initialized = false;
-
-      // mesh stuff
-      _this._material = null;
-      _this._geometry = null;
-      _this._mesh = null;
-      _this._meshHovered = false;
-
-      // dom stuff
-      _this._dom = null;
-      _this._domHovered = false;
-
-      _this._screenPosition = _this.worldToScreen(_this._worldPosition);
-
-      _this.create();
-      _this.initOffsets();
-
-      // event listeners
-      _this.onResize = _this.onResize.bind(_this);
-      _this.onMove = _this.onMove.bind(_this);
-      _this.onHover = _this.onHover.bind(_this);
-      _this.addEventListeners();
-      return _this;
-    }
-
-    _class.prototype.addEventListeners = function addEventListeners() {
-      window.addEventListener('resize', this.onResize);
-
-      this._dom.addEventListener('mouseenter', this.onHover);
-      this._dom.addEventListener('mouseleave', this.onHover);
-
-      this._container.addEventListener('wheel', this.onMove);
-    };
-
-    _class.prototype.removeEventListeners = function removeEventListeners() {
-      window.removeEventListener('resize', this.onResize);
-
-      this._dom.removeEventListener('mouseenter', this.onHover);
-      this._dom.removeEventListener('mouseleave', this.onHover);
-
-      this._container.removeEventListener('wheel', this.onMove);
-    };
-
-    _class.prototype.onResize = function onResize() {
-      this.initOffsets();
-    };
-
-    _class.prototype.onHover = function onHover(evt) {
-      if (evt) {
-        this.hoverDom(evt);
-      }
-
-      this.hoverMesh();
-
-      this._hovered = this._meshHovered || this._domHovered;
-      this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-    };
-
-    _class.prototype.hoverMesh = function hoverMesh() {
-      // check raycast intersection, do we want to hover on mesh or just css?
-      var intersectsHandle = this._raycaster.intersectObject(this._mesh);
-      this._meshHovered = intersectsHandle.length > 0;
-    };
-
-    _class.prototype.hoverDom = function hoverDom(evt) {
-      this._domHovered = evt.type === 'mouseenter';
-    };
-
-    _class.prototype.onStart = function onStart(evt) {
-      var offsets = this.getMouseOffsets(evt, this._container);
-      this._mouse.set(offsets.x, offsets.y);
-
-      // update raycaster
-      this._raycaster.setFromCamera(this._mouse, this._camera);
-      this._raycaster.ray.position = this._raycaster.ray.origin;
-
-      if (this._hovered) {
-        this._active = true;
-        this._controls.enabled = false;
-
-        if (this._targetMesh) {
-          var intersectsTarget = this._raycaster.intersectObject(this._targetMesh);
-          if (intersectsTarget.length > 0) {
-            this._offset.copy(intersectsTarget[0].point).sub(this._worldPosition);
-          }
-        } else {
-          this._plane.position.copy(this._worldPosition);
-          this._plane.direction.copy(this._camera.getWorldDirection());
-          var intersection = _core_core_intersections__WEBPACK_IMPORTED_MODULE_1__["default"].rayPlane(this._raycaster.ray, this._plane);
-          if (intersection !== null) {
-            this._offset.copy(intersection).sub(this._plane.position);
-          }
-        }
-
-        this.update();
-      }
-    };
-
-    /**
-     * @param {Object} evt - Browser event
-     * @param {Boolean} forced - true to move inactive handles
-     */
-
-
-    _class.prototype.onMove = function onMove(evt, forced) {
-      var offsets = this.getMouseOffsets(evt, this._container);
-      this._mouse.set(offsets.x, offsets.y);
-
-      // update raycaster
-      // set ray.position to satisfy CoreIntersections::rayPlane API
-      this._raycaster.setFromCamera(this._mouse, this._camera);
-      this._raycaster.ray.position = this._raycaster.ray.origin;
-
-      if (this._active || forced) {
-        this._dragged = true;
-
-        if (this._targetMesh !== null) {
-          var intersectsTarget = this._raycaster.intersectObject(this._targetMesh);
-          if (intersectsTarget.length > 0) {
-            this._worldPosition.copy(intersectsTarget[0].point.sub(this._offset));
-          }
-        } else {
-          if (this._plane.direction.length() === 0) {
-            // free mode!this._targetMesh
-            this._plane.position.copy(this._worldPosition);
-            this._plane.direction.copy(this._camera.getWorldDirection());
-          }
-
-          var intersection = _core_core_intersections__WEBPACK_IMPORTED_MODULE_1__["default"].rayPlane(this._raycaster.ray, this._plane);
-          if (intersection !== null) {
-            this._worldPosition.copy(intersection.sub(this._offset));
-          }
-        }
-      } else {
-        this.onHover(null);
-      }
-
-      this.update();
-    };
-
-    _class.prototype.onEnd = function onEnd() {
-      if (this._tracking === true) {
-        // stay active and keep controls disabled
-        return;
-      }
-
-      if (!this._dragged && this._active && this._initialized) {
-        this._selected = !this._selected; // change state if there was no dragging
-      }
-
-      this._initialized = true;
-      this._active = false;
-      this._dragged = false;
-      this._controls.enabled = true;
-
-      this.update();
-    };
-
-    _class.prototype.create = function create() {
-      this.createMesh();
-      this.createDOM();
-    };
-
-    _class.prototype.createMesh = function createMesh() {
-      // geometry
-      this._geometry = new three.SphereGeometry(1, 16, 16);
-
-      // material
-      this._material = new three.MeshBasicMaterial({
-        wireframe: true,
-        wireframeLinewidth: 2
-      });
-
-      this.updateMeshColor();
-
-      // mesh
-      this._mesh = new three.Mesh(this._geometry, this._material);
-      this._mesh.position.copy(this._worldPosition);
-      this._mesh.visible = true;
-
-      this.add(this._mesh);
-    };
-
-    _class.prototype.createDOM = function createDOM() {
-      this._dom = document.createElement('div');
-      this._dom.className = 'widgets-handle';
-
-      this._dom.style.transform = 'translate3D(\n      ' + this._screenPosition.x + 'px,\n      ' + (this._screenPosition.y - this._container.offsetHeight) + 'px, 0)';
-
-      this.updateDOMColor();
-
-      this._container.appendChild(this._dom);
-    };
-
-    _class.prototype.update = function update() {
-      // general update
-      this.updateColor();
-
-      // update screen position of handle
-      this._screenPosition = this.worldToScreen(this._worldPosition);
-
-      // mesh stuff
-      this.updateMeshColor();
-      this.updateMeshPosition();
-
-      // DOM stuff
-      this.updateDOMColor();
-      this.updateDOMPosition();
-    };
-
-    _class.prototype.updateMeshColor = function updateMeshColor() {
-      if (this._material) {
-        this._material.color.set(this._color);
-      }
-    };
-
-    _class.prototype.updateMeshPosition = function updateMeshPosition() {
-      if (this._mesh) {
-        this._mesh.position.copy(this._worldPosition);
-      }
-    };
-
-    _class.prototype.updateDOMPosition = function updateDOMPosition() {
-      if (this._dom) {
-        this._dom.style.transform = 'translate3D(' + this._screenPosition.x + 'px,\n        ' + (this._screenPosition.y - this._container.offsetHeight) + 'px, 0)';
-      }
-    };
-
-    _class.prototype.updateDOMColor = function updateDOMColor() {
-      this._dom.style.borderColor = this._color;
-    };
-
-    _class.prototype.showMesh = function showMesh() {
-      if (this._params.hideMesh === true || this._params.hideHandleMesh === true) {
-        return;
-      }
-
-      this.visible = true;
-    };
-
-    _class.prototype.free = function free() {
-      // events
-      this.removeEventListeners();
-      // dom
-      this._container.removeChild(this._dom);
-      // mesh, geometry, material
-      this.remove(this._mesh);
-      this._mesh.geometry.dispose();
-      this._mesh.geometry = null;
-      this._mesh.material.dispose();
-      this._mesh.material = null;
-      this._mesh = null;
-      this._geometry.dispose();
-      this._geometry = null;
-      this._material.vertexShader = null;
-      this._material.fragmentShader = null;
-      this._material.uniforms = null;
-      this._material.dispose();
-      this._material = null;
-
-      _Constructor.prototype.free.call(this);
-    };
-
-    _class.prototype.hideDOM = function hideDOM() {
-      this._dom.style.display = 'none';
-    };
-
-    _class.prototype.showDOM = function showDOM() {
-      this._dom.style.display = '';
-    };
-
-    _createClass(_class, [{
-      key: 'screenPosition',
-      get: function get() {
-        return this._screenPosition;
-      },
-      set: function set(screenPosition) {
-        this._screenPosition = screenPosition;
-      }
-    }, {
-      key: 'active',
-      get: function get() {
-        return this._active;
-      },
-      set: function set(active) {
-        this._active = active;
-        // this._tracking = this._active;
-        this._controls.enabled = !this._active;
-
-        this.update();
-      }
-    }, {
-      key: 'tracking',
-      get: function get() {
-        return this._tracking;
-      },
-      set: function set(tracking) {
-        this._tracking = tracking;
-        this.update();
-      }
-    }]);
-
-    return _class;
-  }(Constructor);
-};
-
-
-/* harmony default export */ __webpack_exports__["default"] = (widgetsHandle());
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.js":
-/*!********************************!*\
-  !*** ./src/widgets/widgets.js ***!
-  \********************************/
-/*! exports provided: WidgetsCss, AngleWidget, angleWidgetFactory, AnnotationWidget, annotationWidgetFactory, BiRulerWidget, birulerWidgetFactory, CrossRulerWidget, crossrulerWidgetFactory, EllipseWidget, ellipseWidgetFactory, FreehandWidget, freehandWidgetFactory, HandleWidget, handleWidgetFactory, PeakVelocityWidget, peakVelocityWidgetFactory, PressureHalfTimeWidget, pressureHalfTimeWidgetFactory, PolygonWidget, polygonWidgetFactory, RectangleWidget, rectangleWidgetFactory, RulerWidget, rulerWidgetFactory, VelocityTimeIntegralWidget, velocityTimeIntegralWidgetFactory, VoxelProbeWidget, voxelprobeWidgetFactory */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony import */ var _widgets_css__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.css */ "./src/widgets/widgets.css.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "WidgetsCss", function() { return _widgets_css__WEBPACK_IMPORTED_MODULE_0__["default"]; });
-
-/* harmony import */ var _widgets_angle__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./widgets.angle */ "./src/widgets/widgets.angle.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "AngleWidget", function() { return _widgets_angle__WEBPACK_IMPORTED_MODULE_1__["default"]; });
-
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "angleWidgetFactory", function() { return _widgets_angle__WEBPACK_IMPORTED_MODULE_1__["widgetsAngle"]; });
-
-/* harmony import */ var _widgets_annotation__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ./widgets.annotation */ "./src/widgets/widgets.annotation.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "AnnotationWidget", function() { return _widgets_annotation__WEBPACK_IMPORTED_MODULE_2__["default"]; });
-
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "annotationWidgetFactory", function() { return _widgets_annotation__WEBPACK_IMPORTED_MODULE_2__["widgetsAnnotation"]; });
-
-/* harmony import */ var _widgets_biruler__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./widgets.biruler */ "./src/widgets/widgets.biruler.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "BiRulerWidget", function() { return _widgets_biruler__WEBPACK_IMPORTED_MODULE_3__["default"]; });
-
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "birulerWidgetFactory", function() { return _widgets_biruler__WEBPACK_IMPORTED_MODULE_3__["widgetsBiruler"]; });
-
-/* harmony import */ var _widgets_crossRuler__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./widgets.crossRuler */ "./src/widgets/widgets.crossRuler.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "CrossRulerWidget", function() { return _widgets_crossRuler__WEBPACK_IMPORTED_MODULE_4__["default"]; });
-
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "crossrulerWidgetFactory", function() { return _widgets_crossRuler__WEBPACK_IMPORTED_MODULE_4__["widgetsCrossRuler"]; });
-
-/* harmony import */ var _widgets_ellipse__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./widgets.ellipse */ "./src/widgets/widgets.ellipse.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "EllipseWidget", function() { return _widgets_ellipse__WEBPACK_IMPORTED_MODULE_5__["default"]; });
-
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "ellipseWidgetFactory", function() { return _widgets_ellipse__WEBPACK_IMPORTED_MODULE_5__["widgetsEllipse"]; });
-
-/* harmony import */ var _widgets_freehand__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./widgets.freehand */ "./src/widgets/widgets.freehand.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "FreehandWidget", function() { return _widgets_freehand__WEBPACK_IMPORTED_MODULE_6__["default"]; });
-
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "freehandWidgetFactory", function() { return _widgets_freehand__WEBPACK_IMPORTED_MODULE_6__["widgetsFreehand"]; });
-
-/* harmony import */ var _widgets_handle__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(/*! ./widgets.handle */ "./src/widgets/widgets.handle.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "HandleWidget", function() { return _widgets_handle__WEBPACK_IMPORTED_MODULE_7__["default"]; });
-
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "handleWidgetFactory", function() { return _widgets_handle__WEBPACK_IMPORTED_MODULE_7__["widgetsHandle"]; });
-
-/* harmony import */ var _widgets_peakVelocity__WEBPACK_IMPORTED_MODULE_8__ = __webpack_require__(/*! ./widgets.peakVelocity */ "./src/widgets/widgets.peakVelocity.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "PeakVelocityWidget", function() { return _widgets_peakVelocity__WEBPACK_IMPORTED_MODULE_8__["default"]; });
-
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "peakVelocityWidgetFactory", function() { return _widgets_peakVelocity__WEBPACK_IMPORTED_MODULE_8__["widgetsPeakVelocity"]; });
-
-/* harmony import */ var _widgets_pressureHalfTime__WEBPACK_IMPORTED_MODULE_9__ = __webpack_require__(/*! ./widgets.pressureHalfTime */ "./src/widgets/widgets.pressureHalfTime.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "PressureHalfTimeWidget", function() { return _widgets_pressureHalfTime__WEBPACK_IMPORTED_MODULE_9__["default"]; });
-
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "pressureHalfTimeWidgetFactory", function() { return _widgets_pressureHalfTime__WEBPACK_IMPORTED_MODULE_9__["widgetsPressureHalfTime"]; });
-
-/* harmony import */ var _widgets_polygon__WEBPACK_IMPORTED_MODULE_10__ = __webpack_require__(/*! ./widgets.polygon */ "./src/widgets/widgets.polygon.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "PolygonWidget", function() { return _widgets_polygon__WEBPACK_IMPORTED_MODULE_10__["default"]; });
-
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "polygonWidgetFactory", function() { return _widgets_polygon__WEBPACK_IMPORTED_MODULE_10__["widgetsPolygon"]; });
-
-/* harmony import */ var _widgets_rectangle__WEBPACK_IMPORTED_MODULE_11__ = __webpack_require__(/*! ./widgets.rectangle */ "./src/widgets/widgets.rectangle.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "RectangleWidget", function() { return _widgets_rectangle__WEBPACK_IMPORTED_MODULE_11__["default"]; });
-
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "rectangleWidgetFactory", function() { return _widgets_rectangle__WEBPACK_IMPORTED_MODULE_11__["widgetsRectangle"]; });
-
-/* harmony import */ var _widgets_ruler__WEBPACK_IMPORTED_MODULE_12__ = __webpack_require__(/*! ./widgets.ruler */ "./src/widgets/widgets.ruler.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "RulerWidget", function() { return _widgets_ruler__WEBPACK_IMPORTED_MODULE_12__["default"]; });
-
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "rulerWidgetFactory", function() { return _widgets_ruler__WEBPACK_IMPORTED_MODULE_12__["widgetsRuler"]; });
-
-/* harmony import */ var _widgets_velocityTimeIntegral__WEBPACK_IMPORTED_MODULE_13__ = __webpack_require__(/*! ./widgets.velocityTimeIntegral */ "./src/widgets/widgets.velocityTimeIntegral.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "VelocityTimeIntegralWidget", function() { return _widgets_velocityTimeIntegral__WEBPACK_IMPORTED_MODULE_13__["default"]; });
-
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "velocityTimeIntegralWidgetFactory", function() { return _widgets_velocityTimeIntegral__WEBPACK_IMPORTED_MODULE_13__["widgetsVelocityTimeIntegral"]; });
-
-/* harmony import */ var _widgets_voxelProbe__WEBPACK_IMPORTED_MODULE_14__ = __webpack_require__(/*! ./widgets.voxelProbe */ "./src/widgets/widgets.voxelProbe.js");
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "VoxelProbeWidget", function() { return _widgets_voxelProbe__WEBPACK_IMPORTED_MODULE_14__["default"]; });
-
-/* harmony reexport (safe) */ __webpack_require__.d(__webpack_exports__, "voxelprobeWidgetFactory", function() { return _widgets_voxelProbe__WEBPACK_IMPORTED_MODULE_14__["widgetsVoxelprobe"]; });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.peakVelocity.js":
-/*!*********************************************!*\
-  !*** ./src/widgets/widgets.peakVelocity.js ***!
-  \*********************************************/
-/*! exports provided: widgetsPeakVelocity, default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "widgetsPeakVelocity", function() { return widgetsPeakVelocity; });
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.base */ "./src/widgets/widgets.base.ts");
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_widgets_base__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _widgets_handle__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./widgets.handle */ "./src/widgets/widgets.handle.js");
-/* harmony import */ var _core_core_utils__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../core/core.utils */ "./src/core/core.utils.js");
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-
-
-
-
-/**
- * @module widgets/peakVelocity (Gradient)
- */
-var widgetsPeakVelocity = function widgetsPeakVelocity() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = Object(_widgets_base__WEBPACK_IMPORTED_MODULE_0__["widgetsBase"])(three);
-
-  return function (_Constructor) {
-    _inherits(_class, _Constructor);
-
-    function _class(targetMesh, controls) {
-      var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-      _classCallCheck(this, _class);
-
-      var _this = _possibleConstructorReturn(this, _Constructor.call(this, targetMesh, controls, params));
-
-      _this._widgetType = 'PeakVelocity';
-
-      // incoming parameters (required: lps2IJK, worldPosition)
-      _this._regions = params.ultrasoundRegions || []; // required
-      if (_this._regions.length < 1) {
-        throw new Error('Ultrasound regions should not be empty!');
-      }
-
-      // outgoing values
-      _this._velocity = null;
-      _this._gradient = null;
-
-      _this._container.style.cursor = 'pointer';
-      _this._controls.enabled = false; // controls should be disabled for widgets with a single handle
-      _this._initialized = false; // set to true onEnd
-      _this._active = true;
-      _this._domHovered = false;
-      _this._initialRegion = _this.getRegionByXY(_this._regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(params.lps2IJK, params.worldPosition));
-      if (_this._initialRegion === null) {
-        throw new Error('Invalid initial UltraSound region!');
-      }
-
-      // dom stuff
-      _this._line = null;
-      _this._label = null;
-
-      // handle (represent line)
-      var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-      _this._handle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(_this._handle);
-
-      _this._moveHandle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(_this._moveHandle);
-      _this._moveHandle.hide();
-
-      _this.create();
-
-      // event listeners
-      _this.onMove = _this.onMove.bind(_this);
-      _this.onHover = _this.onHover.bind(_this);
-      _this.addEventListeners();
-      return _this;
-    }
-
-    _class.prototype.addEventListeners = function addEventListeners() {
-      this._container.addEventListener('wheel', this.onMove);
-
-      this._line.addEventListener('mouseenter', this.onHover);
-      this._line.addEventListener('mouseleave', this.onHover);
-      this._label.addEventListener('mouseenter', this.onHover);
-      this._label.addEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.removeEventListeners = function removeEventListeners() {
-      this._container.removeEventListener('wheel', this.onMove);
-
-      this._line.removeEventListener('mouseenter', this.onHover);
-      this._line.removeEventListener('mouseleave', this.onHover);
-      this._label.removeEventListener('mouseenter', this.onHover);
-      this._label.removeEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.onHover = function onHover(evt) {
-      if (evt) {
-        this.hoverDom(evt);
-      }
-
-      this._hovered = this._handle.hovered || this._domHovered;
-      this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-    };
-
-    _class.prototype.hoverDom = function hoverDom(evt) {
-      this._domHovered = evt.type === 'mouseenter';
-    };
-
-    _class.prototype.onStart = function onStart(evt) {
-      this._moveHandle.onMove(evt, true);
-      this._handle.onStart(evt);
-
-      this._active = this._handle.active || this._domHovered;
-
-      if (this._domHovered) {
-        this._controls.enabled = false;
-      }
-
-      this.update();
-    };
-
-    _class.prototype.onMove = function onMove(evt) {
-      if (this._active) {
-        var prevPosition = this._moveHandle.worldPosition.clone();
-
-        this._moveHandle.onMove(evt, true);
-
-        var shift = this._moveHandle.worldPosition.clone().sub(prevPosition);
-
-        if (!this.isCorrectRegion(shift)) {
-          this._moveHandle.worldPosition.copy(prevPosition);
-
-          return;
-        }
-
-        if (!this._handle.active) {
-          this._handle.worldPosition.add(shift);
-        }
-        this._dragged = true;
-      } else {
-        this.onHover(null);
-      }
-
-      this._handle.onMove(evt);
-      this.update();
-    };
-
-    _class.prototype.onEnd = function onEnd() {
-      this._handle.onEnd();
-
-      if (!this._dragged && this._active && this._initialized) {
-        this._selected = !this._selected; // change state if there was no dragging
-        this._handle.selected = this._selected;
-      }
-
-      this._initialized = true;
-      this._active = false;
-      this._dragged = false;
-
-      this.update();
-    };
-
-    _class.prototype.isCorrectRegion = function isCorrectRegion(shift) {
-      var region = this.getRegionByXY(this._regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(this._params.lps2IJK, this._handle.worldPosition.clone().add(shift)));
-
-      return region !== null && region === this._initialRegion && this._regions[region].unitsY === 'cm/sec';
-    };
-
-    _class.prototype.create = function create() {
-      this.createDOM();
-    };
-
-    _class.prototype.createDOM = function createDOM() {
-      this._line = document.createElement('div');
-      this._line.className = 'widgets-dashline';
-      this._container.appendChild(this._line);
-
-      this._label = document.createElement('div');
-      this._label.className = 'widgets-label';
-
-      // Measurements
-      var measurementsContainer = document.createElement('div');
-      // Peak Velocity
-      var pvContainer = document.createElement('div');
-      pvContainer.className = 'peakVelocity';
-      measurementsContainer.appendChild(pvContainer);
-      // Gradient
-      var gradientContainer = document.createElement('div');
-      gradientContainer.className = 'gradient';
-      measurementsContainer.appendChild(gradientContainer);
-
-      this._label.appendChild(measurementsContainer);
-      this._container.appendChild(this._label);
-
-      this.updateDOMColor();
-    };
-
-    _class.prototype.update = function update() {
-      this.updateColor();
-
-      this._handle.update();
-      this._worldPosition.copy(this._handle.worldPosition);
-
-      this.updateDOM();
-    };
-
-    _class.prototype.updateDOM = function updateDOM() {
-      this.updateDOMColor();
-
-      var point = _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(this._params.lps2IJK, this._worldPosition);
-      var region = this._regions[this.getRegionByXY(this._regions, point)];
-      var usPosition = this.getPointInRegion(region, point);
-
-      this._velocity = Math.abs(usPosition.y / 100);
-      this._gradient = 4 * Math.pow(this._velocity, 2);
-
-      // content
-      this._label.querySelector('.peakVelocity').innerHTML = this._velocity.toFixed(2) + ' m/s';
-      this._label.querySelector('.gradient').innerHTML = this._gradient.toFixed(2) + ' mmhg';
-
-      // position
-      var transform = this.adjustLabelTransform(this._label, this._handle.screenPosition, true);
-
-      this._line.style.transform = 'translate3D(' + (transform.x - (point.x - region.x0) * this._camera.zoom) + 'px, ' + transform.y + 'px, 0)';
-      this._line.style.width = (region.x1 - region.x0) * this._camera.zoom + 'px';
-      this._label.style.transform = 'translate3D(' + (transform.x + 10) + 'px, ' + (transform.y + 10) + 'px, 0)';
-    };
-
-    _class.prototype.updateDOMColor = function updateDOMColor() {
-      this._line.style.backgroundColor = this._color;
-      this._label.style.borderColor = this._color;
-    };
-
-    _class.prototype.hideDOM = function hideDOM() {
-      this._line.style.display = 'none';
-      this._label.style.display = 'none';
-      this._handle.hideDOM();
-    };
-
-    _class.prototype.showDOM = function showDOM() {
-      this._line.style.display = '';
-      this._label.style.display = '';
-      this._handle.showDOM();
-    };
-
-    _class.prototype.free = function free() {
-      this.removeEventListeners();
-
-      this.remove(this._handle);
-      this._handle.free();
-      this._handle = null;
-      this.remove(this._moveHandle);
-      this._moveHandle.free();
-      this._moveHandle = null;
-
-      this._container.removeChild(this._line);
-      this._container.removeChild(this._label);
-
-      _Constructor.prototype.free.call(this);
-    };
-
-    _class.prototype.getMeasurements = function getMeasurements() {
-      return {
-        velocity: this._velocity,
-        gradient: this._gradient
-      };
-    };
-
-    _createClass(_class, [{
-      key: 'targetMesh',
-      get: function get() {
-        return this._targetMesh;
-      },
-      set: function set(targetMesh) {
-        this._targetMesh = targetMesh;
-        this._handle.targetMesh = targetMesh;
-        this._moveHandle.targetMesh = targetMesh;
-        this.update();
-      }
-    }, {
-      key: 'worldPosition',
-      get: function get() {
-        return this._worldPosition;
-      },
-      set: function set(worldPosition) {
-        this._handle.worldPosition.copy(worldPosition);
-        this._moveHandle.worldPosition.copy(worldPosition);
-        this._worldPosition.copy(worldPosition);
-        this.update();
-      }
-    }, {
-      key: 'active',
-      get: function get() {
-        return this._active;
-      },
-      set: function set(active) {
-        this._active = active;
-        this._controls.enabled = !this._active;
-
-        this.update();
-      }
-    }]);
-
-    return _class;
-  }(Constructor);
-};
-
-
-/* harmony default export */ __webpack_exports__["default"] = (widgetsPeakVelocity());
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.polygon.js":
-/*!****************************************!*\
-  !*** ./src/widgets/widgets.polygon.js ***!
-  \****************************************/
-/*! exports provided: widgetsPolygon, default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "widgetsPolygon", function() { return widgetsPolygon; });
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.base */ "./src/widgets/widgets.base.ts");
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_widgets_base__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _widgets_handle__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./widgets.handle */ "./src/widgets/widgets.handle.js");
-/* harmony import */ var _core_core_utils__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../core/core.utils */ "./src/core/core.utils.js");
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-
-
-
-
-/**
- * @module widgets/polygon
- */
-var widgetsPolygon = function widgetsPolygon() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = Object(_widgets_base__WEBPACK_IMPORTED_MODULE_0__["widgetsBase"])(three);
-  return function (_Constructor) {
-    _inherits(_class, _Constructor);
-
-    function _class(targetMesh, controls) {
-      var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-      _classCallCheck(this, _class);
-
-      var _this = _possibleConstructorReturn(this, _Constructor.call(this, targetMesh, controls, params));
-
-      _this._widgetType = 'Polygon';
-
-      // incoming parameters (optional: frameIndex, worldPosition)
-      _this._stack = params.stack; // required
-      _this._calibrationFactor = params.calibrationFactor || null;
-
-      // outgoing values
-      _this._area = null;
-      _this._units = !_this._calibrationFactor && !params.stack.frame[params.frameIndex].pixelSpacing ? 'units' : 'cm²';
-
-      _this._initialized = false; // set to true onDblClick if number of handles > 2
-      _this._newHandleRequired = true; // should handle be created onMove?
-      _this._moving = false;
-      _this._domHovered = false;
-
-      // mesh stuff
-      _this._material = null;
-      _this._geometry = null;
-      _this._mesh = null;
-
-      // dom stuff
-      _this._lines = [];
-      _this._label = null;
-
-      // add handles
-      _this._handles = [];
-      var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-
-      var handle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(handle);
-      _this._handles.push(handle);
-
-      _this._moveHandle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(_this._moveHandle);
-      _this._moveHandle.hide();
-
-      _this.onDoubleClick = _this.onDoubleClick.bind(_this);
-      _this.onMove = _this.onMove.bind(_this);
-      _this.onHover = _this.onHover.bind(_this);
-
-      _this.create();
-
-      _this.addEventListeners();
-      return _this;
-    }
-
-    _class.prototype.addEventListeners = function addEventListeners() {
-      this._container.addEventListener('dblclick', this.onDoubleClick);
-      this._container.addEventListener('wheel', this.onMove);
-
-      this._label.addEventListener('mouseenter', this.onHover);
-      this._label.addEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.removeEventListeners = function removeEventListeners() {
-      this._container.removeEventListener('dblclick', this.onDoubleClick);
-      this._container.removeEventListener('wheel', this.onMove);
-
-      this._label.removeEventListener('mouseenter', this.onHover);
-      this._label.removeEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.onHover = function onHover(evt) {
-      if (evt) {
-        this.hoverDom(evt);
-      }
-
-      this.hoverMesh();
-
-      var hovered = false;
-
-      this._handles.forEach(function (elem) {
-        return hovered = hovered || elem.hovered;
-      });
-
-      this._hovered = hovered || this._domHovered;
-      this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-    };
-
-    _class.prototype.hoverMesh = function hoverMesh() {
-      // check raycast intersection, if we want to hover on mesh instead of just css
-    };
-
-    _class.prototype.hoverDom = function hoverDom(evt) {
-      this._domHovered = evt.type === 'mouseenter';
-    };
-
-    _class.prototype.onStart = function onStart(evt) {
-      var active = false;
-
-      this._handles.forEach(function (elem) {
-        elem.onStart(evt);
-        active = active || elem.active;
-      });
-
-      if (!this._initialized) {
-        return;
-      }
-
-      this._moveHandle.onMove(evt, true);
-      this._active = active || this._domHovered;
-
-      if (this._domHovered && this._initialized) {
-        this._moving = true;
-        this._controls.enabled = false;
-      }
-
-      this.update();
-    };
-
-    _class.prototype.onMove = function onMove(evt) {
-      var _this2 = this;
-
-      var hovered = false;
-
-      if (this.active) {
-        this._dragged = true;
-
-        if (this._newHandleRequired && !this._initialized) {
-          this._handles[this._handles.length - 1].hovered = false;
-          this._handles[this._handles.length - 1].active = false;
-          this._handles[this._handles.length - 1].tracking = false;
-
-          var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-          var handle = new WidgetsHandle(this._targetMesh, this._controls, this._params);
-
-          handle.hovered = true;
-          handle.active = true;
-          handle.tracking = true;
-          this.add(handle);
-          this._handles.push(handle);
-
-          this.createLine();
-          this._newHandleRequired = false;
-        } else {
-          var prevPosition = this._moveHandle.worldPosition.clone();
-
-          this._moveHandle.onMove(evt, true);
-          if (this._mesh) {
-            this.remove(this._mesh);
-          }
-          this.updateDOMContent(true);
-          if (this._moving) {
-            this._handles.forEach(function (handle) {
-              handle.worldPosition.add(_this2._moveHandle.worldPosition.clone().sub(prevPosition));
-            });
-          }
-        }
-      }
-
-      this._handles.forEach(function (elem) {
-        elem.onMove(evt);
-        hovered = hovered || elem.hovered;
-      });
-
-      this._hovered = hovered || this._domHovered;
-      this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-
-      this.update();
-    };
-
-    _class.prototype.onEnd = function onEnd() {
-      var _this3 = this;
-
-      var numHandles = this._handles.length;
-      var active = false;
-
-      if (!this._initialized && numHandles > 1 && this._handles[numHandles - 2].screenPosition.distanceTo(this._handles[numHandles - 1].screenPosition) < 10) {
-        return;
-      }
-
-      this._handles.forEach(function (elem) {
-        elem.onEnd();
-        active = active || elem.active;
-      });
-
-      if (!this._initialized) {
-        this._newHandleRequired = true;
-
-        return;
-      }
-
-      if (this._dragged) {
-        this.updateMesh();
-        this.updateDOMContent();
-      }
-
-      if (!this._dragged && this._active) {
-        this._selected = !this._selected; // change state if there was no dragging
-        this._handles.forEach(function (elem) {
-          return elem.selected = _this3._selected;
-        });
-      }
-      this._active = active || this._handles[numHandles - 1].active;
-      this._dragged = false;
-      this._moving = false;
-
-      this.update();
-    };
-
-    _class.prototype.onDoubleClick = function onDoubleClick() {
-      var numHandles = this._handles.length;
-
-      if (numHandles < 3 || this._initialized || numHandles > 1 && this._handles[numHandles - 2].screenPosition.distanceTo(this._handles[numHandles - 1].screenPosition) < 10) {
-        return;
-      }
-
-      this._handles[numHandles - 1].tracking = false;
-      this._handles.forEach(function (elem) {
-        return elem.onEnd();
-      });
-
-      this._active = false;
-      this._dragged = false;
-      this._moving = false;
-      this._initialized = true;
-
-      this.updateMesh();
-      this.updateDOMContent();
-      this.update();
-    };
-
-    _class.prototype.create = function create() {
-      this.createMaterial();
-      this.createDOM();
-    };
-
-    _class.prototype.createMaterial = function createMaterial() {
-      this._material = new three.MeshBasicMaterial({ side: THREE.DoubleSide });
-      this._material.transparent = true;
-      this._material.opacity = 0.2;
-    };
-
-    _class.prototype.createDOM = function createDOM() {
-      this.createLine();
-
-      this._label = document.createElement('div');
-      this._label.className = 'widgets-label';
-
-      // measurements
-      var measurementsContainer = document.createElement('div');
-      // Mean / SD
-      var meanSDContainer = document.createElement('div');
-      meanSDContainer.className = 'mean-sd';
-      measurementsContainer.appendChild(meanSDContainer);
-      // Max / Min
-      var maxMinContainer = document.createElement('div');
-      maxMinContainer.className = 'max-min';
-      measurementsContainer.appendChild(maxMinContainer);
-      // Area
-      var areaContainer = document.createElement('div');
-      areaContainer.className = 'area';
-      measurementsContainer.appendChild(areaContainer);
-
-      this._label.appendChild(measurementsContainer);
-
-      this._container.appendChild(this._label);
-
-      this.updateDOMColor();
-    };
-
-    _class.prototype.createLine = function createLine() {
-      var line = document.createElement('div');
-
-      line.className = 'widgets-line';
-      line.addEventListener('mouseenter', this.onHover);
-      line.addEventListener('mouseleave', this.onHover);
-      this._lines.push(line);
-      this._container.appendChild(line);
-    };
-
-    _class.prototype.hideDOM = function hideDOM() {
-      this._handles.forEach(function (elem) {
-        return elem.hideDOM();
-      });
-
-      this._lines.forEach(function (elem) {
-        return elem.style.display = 'none';
-      });
-      this._label.style.display = 'none';
-    };
-
-    _class.prototype.showDOM = function showDOM() {
-      this._handles.forEach(function (elem) {
-        return elem.showDOM();
-      });
-
-      this._lines.forEach(function (elem) {
-        return elem.style.display = '';
-      });
-      this._label.style.display = '';
-    };
-
-    _class.prototype.update = function update() {
-      this.updateColor();
-
-      // update handles
-      this._handles.forEach(function (elem) {
-        return elem.update();
-      });
-
-      // mesh stuff
-      this.updateMeshColor();
-      this.updateMeshPosition();
-
-      // DOM stuff
-      this.updateDOMColor();
-      this.updateDOMPosition();
-    };
-
-    _class.prototype.updateMesh = function updateMesh() {
-      if (this._mesh) {
-        this.remove(this._mesh);
-      }
-
-      var points = [];
-
-      this._handles.forEach(function (elem) {
-        return points.push(elem.worldPosition);
-      });
-
-      var center = _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].centerOfMass(points);
-      // direction from first point to center
-      var referenceDirection = new three.Vector3().subVectors(points[0], center).normalize();
-      var direction = new three.Vector3().crossVectors(new three.Vector3().subVectors(points[0], center), // side 1
-      new three.Vector3().subVectors(points[1], center) // side 2
-      );
-      var base = new three.Vector3().crossVectors(referenceDirection, direction).normalize();
-      var orderedpoints = [];
-
-      // other lines // if inter, return location + angle
-      for (var j = 0; j < points.length; j++) {
-        var point = new three.Vector3(points[j].x, points[j].y, points[j].z);
-
-        point.direction = new three.Vector3().subVectors(points[j], center).normalize();
-
-        var x = referenceDirection.dot(point.direction);
-        var y = base.dot(point.direction);
-
-        point.xy = { x: x, y: y };
-        point.angle = Math.atan2(y, x) * (180 / Math.PI);
-
-        orderedpoints.push(point);
-      }
-
-      // override to catch console.warn "THREE.ShapeUtils: Unable to triangulate polygon! in triangulate()"
-      this._shapeWarn = false;
-      var oldWarn = console.warn;
-      console.warn = function () {
-        for (var _len = arguments.length, rest = Array(_len), _key = 0; _key < _len; _key++) {
-          rest[_key] = arguments[_key];
-        }
-
-        if (rest[0] === 'THREE.ShapeUtils: Unable to triangulate polygon! in triangulate()') {
-          this._shapeWarn = true;
-        }
-        return oldWarn.apply(console, rest);
-      }.bind(this);
-
-      // create the shape
-      var shape = new three.Shape();
-      // move to first point!
-      shape.moveTo(orderedpoints[0].xy.x, orderedpoints[0].xy.y);
-
-      // loop through all points!
-      for (var l = 1; l < orderedpoints.length; l++) {
-        // project each on plane!
-        shape.lineTo(orderedpoints[l].xy.x, orderedpoints[l].xy.y);
-      }
-
-      // close the shape!
-      shape.lineTo(orderedpoints[0].xy.x, orderedpoints[0].xy.y);
-
-      this._geometry = new three.ShapeGeometry(shape);
-
-      console.warn = oldWarn;
-
-      this._geometry.vertices = orderedpoints;
-      this._geometry.verticesNeedUpdate = true;
-      this._geometry.elementsNeedUpdate = true;
-
-      this.updateMeshColor();
-
-      this._mesh = new three.Mesh(this._geometry, this._material);
-      this._mesh.visible = true;
-      this.add(this._mesh);
-    };
-
-    _class.prototype.updateMeshColor = function updateMeshColor() {
-      if (this._material) {
-        this._material.color.set(this._color);
-      }
-    };
-
-    _class.prototype.updateMeshPosition = function updateMeshPosition() {
-      if (this._geometry) {
-        this._geometry.verticesNeedUpdate = true;
-      }
-    };
-
-    _class.prototype.updateDOMColor = function updateDOMColor() {
-      var _this4 = this;
-
-      this._lines.forEach(function (elem) {
-        return elem.style.backgroundColor = _this4._color;
-      });
-      this._label.style.borderColor = this._color;
-    };
-
-    _class.prototype.updateDOMContent = function updateDOMContent(clear) {
-      var _this5 = this;
-
-      var meanSDContainer = this._label.querySelector('.mean-sd');
-      var maxMinContainer = this._label.querySelector('.max-min');
-      var areaContainer = this._label.querySelector('.area');
-
-      if (clear) {
-        meanSDContainer.innerHTML = '';
-        maxMinContainer.innerHTML = '';
-        areaContainer.innerHTML = '';
-
-        return;
-      }
-
-      var regions = this._stack.frame[this._params.frameIndex].ultrasoundRegions || [];
-
-      this._area = _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].getGeometryArea(this._geometry); // this.getArea result is changed on dragging
-      if (this._calibrationFactor) {
-        this._area *= Math.pow(this._calibrationFactor, 2);
-      } else if (regions && regions.length > 0 && this._stack.lps2IJK) {
-        var same = true;
-        var cRegion = void 0;
-        var pRegion = void 0;
-
-        this._handles.forEach(function (elem) {
-          cRegion = _this5.getRegionByXY(regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(_this5._stack.lps2IJK, elem.worldPosition));
-          if (cRegion === null || regions[cRegion].unitsX !== 'cm' || pRegion !== undefined && pRegion !== cRegion) {
-            same = false;
-          }
-          pRegion = cRegion;
-        });
-
-        if (same) {
-          this._area *= Math.pow(regions[cRegion].deltaX, 2);
-          this._units = 'cm²';
-        } else if (this._stack.frame[this._params.frameIndex].pixelSpacing) {
-          this._area /= 100;
-          this._units = 'cm²';
-        } else {
-          this._units = 'units';
-        }
-      } else if (this._units === 'cm²') {
-        this._area /= 100;
-      }
-
-      var title = this._units === 'units' ? 'Calibration is required to display the area in cm². ' : '';
-
-      if (this._shapeWarn) {
-        title += 'Values may be incorrect due to triangulation error.';
-      }
-      if (title !== '' && !this._label.hasAttribute('title')) {
-        this._label.setAttribute('title', title);
-        this._label.style.color = this._colors.error;
-      } else if (title === '' && this._label.hasAttribute('title')) {
-        this._label.removeAttribute('title');
-        this._label.style.color = this._colors.text;
-      }
-
-      var roi = _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].getRoI(this._mesh, this._camera, this._stack);
-
-      if (roi !== null) {
-        meanSDContainer.innerHTML = 'Mean: ' + roi.mean.toFixed(1) + ' / SD: ' + roi.sd.toFixed(1);
-        maxMinContainer.innerHTML = 'Max: ' + roi.max.toFixed() + ' / Min: ' + roi.min.toFixed();
-      } else {
-        meanSDContainer.innerHTML = '';
-        maxMinContainer.innerHTML = '';
-      }
-      areaContainer.innerHTML = 'Area: ' + this._area.toFixed(2) + ' ' + this._units;
-    };
-
-    _class.prototype.updateDOMPosition = function updateDOMPosition() {
-      var _this6 = this;
-
-      // update lines and get coordinates of lowest handle
-      var labelPosition = null;
-
-      this._lines.forEach(function (elem, ind) {
-        var lineData = _this6.getLineData(_this6._handles[ind].screenPosition, _this6._handles[ind + 1 === _this6._handles.length ? 0 : ind + 1].screenPosition);
-
-        elem.style.transform = 'translate3D(' + lineData.transformX + 'px, ' + lineData.transformY + 'px, 0)\n                    rotate(' + lineData.transformAngle + 'rad)';
-        elem.style.width = lineData.length + 'px';
-
-        if (labelPosition === null || labelPosition.y < _this6._handles[ind].screenPosition.y) {
-          labelPosition = _this6._handles[ind].screenPosition.clone();
-        }
-      });
-
-      if (!this._initialized) {
-        return;
-      }
-
-      // update label
-      labelPosition.y += 15 + this._label.offsetHeight / 2;
-      labelPosition = this.adjustLabelTransform(this._label, labelPosition);
-
-      this._label.style.transform = 'translate3D(' + labelPosition.x + 'px, ' + labelPosition.y + 'px, 0)';
-    };
-
-    _class.prototype.free = function free() {
-      var _this7 = this;
-
-      this.removeEventListeners();
-
-      this._handles.forEach(function (h) {
-        _this7.remove(h);
-        h.free();
-      });
-      this._handles = [];
-
-      this.remove(this._moveHandle);
-      this._moveHandle.free();
-      this._moveHandle = null;
-
-      this._lines.forEach(function (elem) {
-        elem.removeEventListener('mouseenter', _this7.onHover);
-        elem.removeEventListener('mouseleave', _this7.onHover);
-        _this7._container.removeChild(elem);
-      });
-      this._lines = [];
-      this._container.removeChild(this._label);
-
-      // mesh, geometry, material
-      if (this._mesh) {
-        this.remove(this._mesh);
-        this._mesh.geometry.dispose();
-        this._mesh.geometry = null;
-        this._mesh.material.dispose();
-        this._mesh.material = null;
-        this._mesh = null;
-      }
-      if (this._geometry) {
-        this._geometry.dispose();
-        this._geometry = null;
-      }
-      this._material.vertexShader = null;
-      this._material.fragmentShader = null;
-      this._material.uniforms = null;
-      this._material.dispose();
-      this._material = null;
-
-      this._stack = null;
-
-      _Constructor.prototype.free.call(this);
-    };
-
-    _class.prototype.getMeasurements = function getMeasurements() {
-      return {
-        area: this._area,
-        units: this._units
-      };
-    };
-
-    _createClass(_class, [{
-      key: 'targetMesh',
-      get: function get() {
-        return this._targetMesh;
-      },
-      set: function set(targetMesh) {
-        this._targetMesh = targetMesh;
-        this._handles.forEach(function (elem) {
-          return elem.targetMesh = targetMesh;
-        });
-        this._moveHandle.targetMesh = targetMesh;
-        this.update();
-      }
-    }, {
-      key: 'worldPosition',
-      get: function get() {
-        return this._worldPosition;
-      },
-      set: function set(worldPosition) {
-        this._handles.forEach(function (elem) {
-          return elem.worldPosition.copy(worldPosition);
-        });
-        this._worldPosition.copy(worldPosition);
-        this.update();
-      }
-    }, {
-      key: 'calibrationFactor',
-      get: function get() {
-        return this._calibrationFactor;
-      },
-      set: function set(calibrationFactor) {
-        this._calibrationFactor = calibrationFactor;
-        this._units = 'cm²';
-        this.update();
-      }
-    }]);
-
-    return _class;
-  }(Constructor);
-};
-
-
-/* harmony default export */ __webpack_exports__["default"] = (widgetsPolygon());
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.pressureHalfTime.js":
-/*!*************************************************!*\
-  !*** ./src/widgets/widgets.pressureHalfTime.js ***!
-  \*************************************************/
-/*! exports provided: widgetsPressureHalfTime, default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "widgetsPressureHalfTime", function() { return widgetsPressureHalfTime; });
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.base */ "./src/widgets/widgets.base.ts");
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_widgets_base__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _widgets_handle__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./widgets.handle */ "./src/widgets/widgets.handle.js");
-/* harmony import */ var _core_core_utils__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../core/core.utils */ "./src/core/core.utils.js");
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-
-
-
-
-/**
- * @module widgets/pressureHalfTime
- */
-var widgetsPressureHalfTime = function widgetsPressureHalfTime() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = Object(_widgets_base__WEBPACK_IMPORTED_MODULE_0__["widgetsBase"])(three);
-
-  return function (_Constructor) {
-    _inherits(_class, _Constructor);
-
-    function _class(targetMesh, controls) {
-      var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-      _classCallCheck(this, _class);
-
-      var _this = _possibleConstructorReturn(this, _Constructor.call(this, targetMesh, controls, params));
-
-      _this._widgetType = 'PressureHalfTime';
-
-      // incoming parameters (required: lps2IJK, worldPosition)
-      _this._regions = params.ultrasoundRegions || []; // required
-      if (_this._regions.length < 1) {
-        throw new Error('Ultrasound regions should not be empty!');
-      }
-
-      // outgoing values
-      _this._vMax = null; // Maximum Velocity (Vmax)
-      _this._gMax = null; // Maximum Gradient (Gmax)
-      _this._pht = null; // Pressure Half Time (PHT)
-      _this._mva = null; // Mitral Valve Area (MVA)
-      _this._dt = null; // Deceleration Time (DT)
-      _this._ds = null; // Deceleration Slope (DS)
-
-      _this._domHovered = false;
-      _this._initialRegion = _this.getRegionByXY(_this._regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(params.lps2IJK, params.worldPosition));
-      if (_this._initialRegion === null) {
-        throw new Error('Invalid initial UltraSound region!');
-      }
-
-      // mesh stuff
-      _this._material = null;
-      _this._geometry = null;
-      _this._mesh = null;
-
-      // dom stuff
-      _this._line = null;
-      _this._label = null;
-
-      // add handles
-      _this._handles = [];
-      var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-
-      var handle = void 0;
-      for (var i = 0; i < 2; i++) {
-        handle = new WidgetsHandle(targetMesh, controls, params);
-        _this.add(handle);
-        _this._handles.push(handle);
-      }
-      _this._handles[1].active = true;
-      _this._handles[1].tracking = true;
-
-      _this._moveHandle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(_this._moveHandle);
-      _this._handles.push(_this._moveHandle);
-      _this._moveHandle.hide();
-
-      _this.create();
-
-      _this.onMove = _this.onMove.bind(_this);
-      _this.onHover = _this.onHover.bind(_this);
-      _this.addEventListeners();
-      return _this;
-    }
-
-    _class.prototype.addEventListeners = function addEventListeners() {
-      this._container.addEventListener('wheel', this.onMove);
-
-      this._line.addEventListener('mouseenter', this.onHover);
-      this._line.addEventListener('mouseleave', this.onHover);
-      this._label.addEventListener('mouseenter', this.onHover);
-      this._label.addEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.removeEventListeners = function removeEventListeners() {
-      this._container.removeEventListener('wheel', this.onMove);
-
-      this._line.removeEventListener('mouseenter', this.onHover);
-      this._line.removeEventListener('mouseleave', this.onHover);
-      this._label.removeEventListener('mouseenter', this.onHover);
-      this._label.removeEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.onHover = function onHover(evt) {
-      if (evt) {
-        this.hoverDom(evt);
-      }
-
-      this.hoverMesh();
-
-      this._hovered = this._handles[0].hovered || this._handles[1].hovered || this._domHovered;
-      this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-    };
-
-    _class.prototype.hoverMesh = function hoverMesh() {
-      // check raycast intersection, do we want to hover on mesh or just css?
-    };
-
-    _class.prototype.hoverDom = function hoverDom(evt) {
-      this._domHovered = evt.type === 'mouseenter';
-    };
-
-    _class.prototype.onStart = function onStart(evt) {
-      this._moveHandle.onMove(evt, true);
-
-      this._handles[0].onStart(evt);
-      this._handles[1].onStart(evt);
-
-      this._active = this._handles[0].active || this._handles[1].active || this._domHovered;
-
-      if (this._domHovered) {
-        this._controls.enabled = false;
-      }
-
-      this.update();
-    };
-
-    _class.prototype.onMove = function onMove(evt) {
-      if (this._active) {
-        var prevPosition = this._moveHandle.worldPosition.clone();
-
-        this._moveHandle.onMove(evt, true);
-
-        var shift = this._moveHandle.worldPosition.clone().sub(prevPosition);
-
-        if (!this.isCorrectRegion(shift)) {
-          this._moveHandle.worldPosition.copy(prevPosition);
-
-          return;
-        }
-
-        if (!this._handles[0].active && !this._handles[1].active) {
-          this._handles.slice(0, -1).forEach(function (handle) {
-            handle.worldPosition.add(shift);
-          });
-        }
-        this._dragged = true;
-      } else {
-        this.onHover(null);
-      }
-
-      this._handles[0].onMove(evt);
-      this._handles[1].onMove(evt);
-      this.update();
-    };
-
-    _class.prototype.onEnd = function onEnd() {
-      this._handles[0].onEnd(); // First Handle
-
-      if (this._handles[1].tracking && this._handles[0].screenPosition.distanceTo(this._handles[1].screenPosition) < 10) {
-        return;
-      }
-
-      if (!this._dragged && this._active && !this._handles[1].tracking) {
-        this._selected = !this._selected; // change state if there was no dragging
-        this._handles[0].selected = this._selected;
-      }
-
-      // Second Handle
-      if (this._dragged || !this._handles[1].tracking) {
-        this._handles[1].tracking = false;
-        this._handles[1].onEnd();
-      } else {
-        this._handles[1].tracking = false;
-      }
-      this._handles[1].selected = this._selected;
-
-      this._active = this._handles[0].active || this._handles[1].active;
-      this._dragged = false;
-
-      this.update();
-    };
-
-    _class.prototype.isCorrectRegion = function isCorrectRegion(shift) {
-      var inActive = !(this._handles[0].active || this._handles[1].active);
-      var isCorrect = true;
-
-      if (this._handles[0].active || inActive) {
-        isCorrect = isCorrect && this.checkHandle(0, shift);
-      }
-      if (this._handles[1].active || inActive) {
-        isCorrect = isCorrect && this.checkHandle(1, shift);
-      }
-
-      return isCorrect;
-    };
-
-    _class.prototype.checkHandle = function checkHandle(index, shift) {
-      var region = this.getRegionByXY(this._regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(this._params.lps2IJK, this._handles[index].worldPosition.clone().add(shift)));
-
-      return region !== null && region === this._initialRegion && this._regions[region].unitsY === 'cm/sec';
-    };
-
-    _class.prototype.create = function create() {
-      this.createMesh();
-      this.createDOM();
-    };
-
-    _class.prototype.createMesh = function createMesh() {
-      // geometry
-      this._geometry = new three.Geometry();
-      this._geometry.vertices = [this._handles[0].worldPosition, this._handles[1].worldPosition];
-
-      // material
-      this._material = new three.LineBasicMaterial();
-
-      this.updateMeshColor();
-
-      // mesh
-      this._mesh = new three.Line(this._geometry, this._material);
-      this._mesh.visible = true;
-
-      this.add(this._mesh);
-    };
-
-    _class.prototype.createDOM = function createDOM() {
-      this._line = document.createElement('div');
-      this._line.className = 'widgets-line';
-      this._container.appendChild(this._line);
-
-      this._label = document.createElement('div');
-      this._label.className = 'widgets-label';
-
-      var measurementsContainer = document.createElement('div');
-
-      ['vmax', 'gmax', 'pht', 'mva', 'dt', 'ds'].forEach(function (name) {
-        var div = document.createElement('div');
-
-        div.className = name;
-        measurementsContainer.appendChild(div);
-      });
-      this._label.appendChild(measurementsContainer);
-
-      this._container.appendChild(this._label);
-
-      this.updateDOMColor();
-    };
-
-    _class.prototype.hideDOM = function hideDOM() {
-      this._line.style.display = 'none';
-      this._label.style.display = 'none';
-      this._handles.forEach(function (elem) {
-        return elem.hideDOM();
-      });
-    };
-
-    _class.prototype.showDOM = function showDOM() {
-      this._line.style.display = '';
-      this._label.style.display = '';
-      this._handles[0].showDOM();
-      this._handles[1].showDOM();
-    };
-
-    _class.prototype.update = function update() {
-      this.updateColor();
-
-      this._handles[0].update();
-      this._handles[1].update();
-
-      this.updateValues();
-
-      this.updateMeshColor();
-      this.updateMeshPosition();
-
-      this.updateDOM();
-    };
-
-    _class.prototype.updateValues = function updateValues() {
-      var usPosition0 = this.getUsPoint(this._regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(this._params.lps2IJK, this._handles[0].worldPosition));
-      var usPosition1 = this.getUsPoint(this._regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(this._params.lps2IJK, this._handles[1].worldPosition));
-      var velocity0 = Math.abs(usPosition0.y / 100);
-      var velocity1 = Math.abs(usPosition1.y / 100);
-      var time0 = Math.abs(usPosition0.x);
-      var time1 = Math.abs(usPosition1.x);
-      var vMaxTime = this._vMax === velocity0 ? time0 : time1;
-
-      this._vMax = Math.max(velocity0, velocity1);
-      this._gMax = 4 * Math.pow(this._vMax, 2);
-
-      var phtVelocity = this._vMax / Math.sqrt(2);
-      var phtKoeff = (velocity0 - phtVelocity) / (velocity1 - phtVelocity);
-      var dtKoeff = velocity0 / velocity1;
-
-      this._pht = phtKoeff === 1 ? Number.POSITIVE_INFINITY : Math.abs(vMaxTime - (time0 - phtKoeff * time1) / (1 - phtKoeff)) * 1000;
-      this._mva = 220 / this._pht;
-      this._dt = dtKoeff === 1 ? Number.POSITIVE_INFINITY : Math.abs(vMaxTime - (time0 - dtKoeff * time1) / (1 - dtKoeff)) * 1000;
-      this._ds = this._dt === 0 ? Number.POSITIVE_INFINITY : this._vMax / this._dt * 1000;
-    };
-
-    _class.prototype.updateMeshColor = function updateMeshColor() {
-      if (this._material) {
-        this._material.color.set(this._color);
-      }
-    };
-
-    _class.prototype.updateMeshPosition = function updateMeshPosition() {
-      if (this._geometry) {
-        this._geometry.verticesNeedUpdate = true;
-      }
-    };
-
-    _class.prototype.updateDOM = function updateDOM() {
-      this.updateDOMColor();
-
-      // update line
-      var lineData = this.getLineData(this._handles[0].screenPosition, this._handles[1].screenPosition);
-
-      this._line.style.transform = 'translate3D(' + lineData.transformX + 'px, ' + lineData.transformY + 'px, 0)\n                rotate(' + lineData.transformAngle + 'rad)';
-      this._line.style.width = lineData.length + 'px';
-
-      // update label
-      this._label.querySelector('.vmax').innerHTML = 'Vmax: ' + this._vMax.toFixed(2) + ' m/s';
-      this._label.querySelector('.gmax').innerHTML = 'Gmax: ' + this._gMax.toFixed(2) + ' mmhg';
-      this._label.querySelector('.pht').innerHTML = 'PHT: ' + this._pht.toFixed(1) + ' ms';
-      this._label.querySelector('.mva').innerHTML = 'MVA: ' + this._mva.toFixed(2) + ' cm\xB2';
-      this._label.querySelector('.dt').innerHTML = 'DT: ' + this._dt.toFixed(1) + ' ms';
-      this._label.querySelector('.ds').innerHTML = 'DS: ' + this._ds.toFixed(2) + ' m/s\xB2';
-
-      var angle = Math.abs(lineData.transformAngle);
-
-      if (angle > Math.PI / 2) {
-        angle = Math.PI - angle;
-      }
-
-      var labelPadding = Math.tan(angle) < this._label.offsetHeight / this._label.offsetWidth ? this._label.offsetWidth / 2 / Math.cos(angle) + 15 // 5px for each handle + padding
-      : this._label.offsetHeight / 2 / Math.cos(Math.PI / 2 - angle) + 15;
-      var paddingVector = lineData.line.normalize().multiplyScalar(labelPadding);
-      var paddingPoint = lineData.length > labelPadding * 2 ? this._handles[1].screenPosition.clone().sub(paddingVector) : this._handles[1].screenPosition.clone().add(paddingVector);
-      var transform = this.adjustLabelTransform(this._label, paddingPoint);
-
-      this._label.style.transform = 'translate3D(' + transform.x + 'px, ' + transform.y + 'px, 0)';
-    };
-
-    _class.prototype.updateDOMColor = function updateDOMColor() {
-      this._line.style.backgroundColor = this._color;
-      this._label.style.borderColor = this._color;
-    };
-
-    _class.prototype.free = function free() {
-      var _this2 = this;
-
-      this.removeEventListeners();
-
-      this._handles.forEach(function (h) {
-        _this2.remove(h);
-        h.free();
-      });
-      this._handles = [];
-
-      this._container.removeChild(this._line);
-      this._container.removeChild(this._label);
-
-      // mesh, geometry, material
-      this.remove(this._mesh);
-      this._mesh.geometry.dispose();
-      this._mesh.geometry = null;
-      this._mesh.material.dispose();
-      this._mesh.material = null;
-      this._mesh = null;
-      this._geometry.dispose();
-      this._geometry = null;
-      this._material.vertexShader = null;
-      this._material.fragmentShader = null;
-      this._material.uniforms = null;
-      this._material.dispose();
-      this._material = null;
-
-      _Constructor.prototype.free.call(this);
-    };
-
-    _class.prototype.getMeasurements = function getMeasurements() {
-      return {
-        vMax: this._vMax,
-        gMax: this._gMax,
-        pht: this._pht,
-        mva: this._mva,
-        dt: this._dt,
-        ds: this._ds
-      };
-    };
-
-    _createClass(_class, [{
-      key: 'targetMesh',
-      get: function get() {
-        return this._targetMesh;
-      },
-      set: function set(targetMesh) {
-        this._targetMesh = targetMesh;
-        this._handles.forEach(function (elem) {
-          return elem.targetMesh = targetMesh;
-        });
-        this.update();
-      }
-    }, {
-      key: 'worldPosition',
-      get: function get() {
-        return this._worldPosition;
-      },
-      set: function set(worldPosition) {
-        this._handles[0].worldPosition.copy(worldPosition);
-        this._handles[1].worldPosition.copy(worldPosition);
-        this._worldPosition.copy(worldPosition);
-        this.update();
-      }
-    }]);
-
-    return _class;
-  }(Constructor);
-};
-
-
-/* harmony default export */ __webpack_exports__["default"] = (widgetsPressureHalfTime());
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.rectangle.js":
-/*!******************************************!*\
-  !*** ./src/widgets/widgets.rectangle.js ***!
-  \******************************************/
-/*! exports provided: widgetsRectangle, default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "widgetsRectangle", function() { return widgetsRectangle; });
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.base */ "./src/widgets/widgets.base.ts");
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_widgets_base__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _widgets_handle__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./widgets.handle */ "./src/widgets/widgets.handle.js");
-/* harmony import */ var _core_core_utils__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../core/core.utils */ "./src/core/core.utils.js");
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-
-
-
-
-/**
- * @module widgets/rectangle
- */
-var widgetsRectangle = function widgetsRectangle() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = Object(_widgets_base__WEBPACK_IMPORTED_MODULE_0__["widgetsBase"])(three);
-  return function (_Constructor) {
-    _inherits(_class, _Constructor);
-
-    function _class(targetMesh, controls) {
-      var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-      _classCallCheck(this, _class);
-
-      var _this = _possibleConstructorReturn(this, _Constructor.call(this, targetMesh, controls, params));
-
-      _this._widgetType = 'Rectangle';
-
-      // incoming parameters (optional: frameIndex, worldPosition)
-      _this._stack = params.stack; // required
-      _this._calibrationFactor = params.calibrationFactor || null;
-
-      // outgoing values
-      _this._area = null;
-      _this._units = !_this._calibrationFactor && !params.stack.frame[params.frameIndex].pixelSpacing ? 'units' : 'cm²';
-
-      _this._moving = false;
-      _this._domHovered = false;
-
-      // mesh stuff
-      _this._material = null;
-      _this._geometry = null;
-      _this._mesh = null;
-
-      // dom stuff
-      _this._rectangle = null;
-      _this._label = null;
-
-      // add handles
-      _this._handles = [];
-      var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-
-      var handle = void 0;
-      for (var i = 0; i < 2; i++) {
-        handle = new WidgetsHandle(targetMesh, controls, params);
-        _this.add(handle);
-        _this._handles.push(handle);
-      }
-      _this._handles[1].active = true;
-      _this._handles[1].tracking = true;
-
-      _this._moveHandle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(_this._moveHandle);
-      _this._handles.push(_this._moveHandle);
-      _this._moveHandle.hide();
-
-      _this.create();
-
-      _this.onMove = _this.onMove.bind(_this);
-      _this.onHover = _this.onHover.bind(_this);
-      _this.addEventListeners();
-      return _this;
-    }
-
-    _class.prototype.addEventListeners = function addEventListeners() {
-      this._container.addEventListener('wheel', this.onMove);
-
-      this._rectangle.addEventListener('mouseenter', this.onHover);
-      this._rectangle.addEventListener('mouseleave', this.onHover);
-      this._label.addEventListener('mouseenter', this.onHover);
-      this._label.addEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.removeEventListeners = function removeEventListeners() {
-      this._container.removeEventListener('wheel', this.onMove);
-
-      this._rectangle.removeEventListener('mouseenter', this.onHover);
-      this._rectangle.removeEventListener('mouseleave', this.onHover);
-      this._label.removeEventListener('mouseenter', this.onHover);
-      this._label.removeEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.onHover = function onHover(evt) {
-      if (evt) {
-        this.hoverDom(evt);
-      }
-
-      this.hoverMesh();
-
-      this._hovered = this._handles[0].hovered || this._handles[1].hovered || this._domHovered;
-      this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-    };
-
-    _class.prototype.hoverMesh = function hoverMesh() {
-      // check raycast intersection, if we want to hover on mesh instead of just css
-    };
-
-    _class.prototype.hoverDom = function hoverDom(evt) {
-      this._domHovered = evt.type === 'mouseenter';
-    };
-
-    _class.prototype.onStart = function onStart(evt) {
-      this._moveHandle.onMove(evt, true);
-
-      this._handles[0].onStart(evt);
-      this._handles[1].onStart(evt);
-
-      this._active = this._handles[0].active || this._handles[1].active || this._domHovered;
-
-      if (this._domHovered && !this._handles[1].tracking) {
-        this._moving = true;
-        this._controls.enabled = false;
-      }
-
-      this.update();
-    };
-
-    _class.prototype.onMove = function onMove(evt) {
-      var _this2 = this;
-
-      if (this._active) {
-        var prevPosition = this._moveHandle.worldPosition.clone();
-
-        this._dragged = true;
-        this._moveHandle.onMove(evt, true);
-
-        if (this._moving) {
-          this._handles.slice(0, -1).forEach(function (handle) {
-            handle.worldPosition.add(_this2._moveHandle.worldPosition.clone().sub(prevPosition));
-          });
-        }
-
-        this.updateRoI(true);
-      } else {
-        this.onHover(null);
-      }
-
-      this._handles[0].onMove(evt);
-      this._handles[1].onMove(evt);
-
-      this.update();
-    };
-
-    _class.prototype.onEnd = function onEnd() {
-      this._handles[0].onEnd(); // First Handle
-
-      if (this._handles[1].tracking && this._handles[0].screenPosition.distanceTo(this._handles[1].screenPosition) < 10) {
-        return;
-      }
-
-      if (!this._dragged && this._active && !this._handles[1].tracking) {
-        this._selected = !this._selected; // change state if there was no dragging
-        this._handles[0].selected = this._selected;
-      }
-
-      // Second Handle
-      if (this._dragged || !this._handles[1].tracking) {
-        this._handles[1].tracking = false;
-        this._handles[1].onEnd();
-      } else {
-        this._handles[1].tracking = false;
-      }
-      this._handles[1].selected = this._selected;
-
-      this._active = this._handles[0].active || this._handles[1].active;
-      this._dragged = false;
-      this._moving = false;
-
-      this.updateRoI(); // TODO: if (this._dragged || !this._initialized)
-      this.update();
-    };
-
-    _class.prototype.hideDOM = function hideDOM() {
-      this._handles.forEach(function (elem) {
-        return elem.hideDOM();
-      });
-
-      this._rectangle.style.display = 'none';
-      this._label.style.display = 'none';
-    };
-
-    _class.prototype.showDOM = function showDOM() {
-      this._handles[0].showDOM();
-      this._handles[1].showDOM();
-
-      this._rectangle.style.display = '';
-      this._label.style.display = '';
-    };
-
-    _class.prototype.create = function create() {
-      this.createMesh();
-      this.createDOM();
-    };
-
-    _class.prototype.createMesh = function createMesh() {
-      this._geometry = new three.PlaneGeometry(1, 1);
-
-      this._material = new three.MeshBasicMaterial({ side: three.DoubleSide });
-      this._material.transparent = true;
-      this._material.opacity = 0.2;
-
-      this.updateMeshColor();
-
-      this._mesh = new three.Mesh(this._geometry, this._material);
-      this._mesh.visible = true;
-
-      this.add(this._mesh);
-    };
-
-    _class.prototype.createDOM = function createDOM() {
-      this._rectangle = document.createElement('div');
-      this._rectangle.className = 'widgets-rectangle';
-      this._container.appendChild(this._rectangle);
-
-      this._label = document.createElement('div');
-      this._label.className = 'widgets-label';
-
-      // measurements
-      var measurementsContainer = document.createElement('div');
-      // Mean / SD
-      var meanSDContainer = document.createElement('div');
-      meanSDContainer.className = 'mean-sd';
-      measurementsContainer.appendChild(meanSDContainer);
-      // Max / Min
-      var maxMinContainer = document.createElement('div');
-      maxMinContainer.className = 'max-min';
-      measurementsContainer.appendChild(maxMinContainer);
-      // Area
-      var areaContainer = document.createElement('div');
-      areaContainer.className = 'area';
-      measurementsContainer.appendChild(areaContainer);
-
-      this._label.appendChild(measurementsContainer);
-
-      this._container.appendChild(this._label);
-
-      this.updateDOMColor();
-    };
-
-    _class.prototype.update = function update() {
-      this.updateColor();
-
-      this._handles[0].update();
-      this._handles[1].update();
-
-      this.updateMeshColor();
-      this.updateMeshPosition();
-
-      this.updateDOM();
-    };
-
-    _class.prototype.updateMeshColor = function updateMeshColor() {
-      if (this._material) {
-        this._material.color.set(this._color);
-      }
-    };
-
-    _class.prototype.updateMeshPosition = function updateMeshPosition() {
-      if (this._geometry) {
-        var progection = new three.Vector3().subVectors(this._handles[1].worldPosition, this._handles[0].worldPosition).projectOnVector(this._camera.up);
-
-        this._geometry.vertices[0].copy(this._handles[0].worldPosition);
-        this._geometry.vertices[1].copy(new three.Vector3().addVectors(this._handles[0].worldPosition, progection));
-        this._geometry.vertices[2].copy(new three.Vector3().subVectors(this._handles[1].worldPosition, progection));
-        this._geometry.vertices[3].copy(this._handles[1].worldPosition);
-
-        this._geometry.verticesNeedUpdate = true;
-        this._geometry.computeBoundingSphere();
-      }
-    };
-
-    _class.prototype.updateRoI = function updateRoI(clear) {
-      var meanSDContainer = this._label.querySelector('.mean-sd');
-      var maxMinContainer = this._label.querySelector('.max-min');
-
-      if (clear) {
-        meanSDContainer.innerHTML = '';
-        maxMinContainer.innerHTML = '';
-
-        return;
-      }
-
-      var roi = _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].getRoI(this._mesh, this._camera, this._stack);
-
-      if (roi !== null) {
-        meanSDContainer.innerHTML = 'Mean: ' + roi.mean.toFixed(1) + ' / SD: ' + roi.sd.toFixed(1);
-        maxMinContainer.innerHTML = 'Max: ' + roi.max.toFixed() + ' / Min: ' + roi.min.toFixed();
-      } else {
-        meanSDContainer.innerHTML = '';
-        maxMinContainer.innerHTML = '';
-      }
-    };
-
-    _class.prototype.updateDOMColor = function updateDOMColor() {
-      this._rectangle.style.borderColor = this._color;
-      this._label.style.borderColor = this._color;
-    };
-
-    _class.prototype.updateDOM = function updateDOM() {
-      this.updateDOMColor();
-
-      var regions = this._stack.frame[this._params.frameIndex].ultrasoundRegions || [];
-
-      this._area = _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].getGeometryArea(this._geometry);
-      if (this._calibrationFactor) {
-        this._area *= Math.pow(this._calibrationFactor, 2);
-      } else if (regions && regions.length > 0 && this._stack.lps2IJK) {
-        var region0 = this.getRegionByXY(regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(this._stack.lps2IJK, this._handles[0].worldPosition));
-        var region1 = this.getRegionByXY(regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(this._stack.lps2IJK, this._handles[1].worldPosition));
-
-        if (region0 !== null && region1 !== null && region0 === region1 && regions[region0].unitsX === 'cm' && regions[region0].unitsY === 'cm') {
-          this._area *= Math.pow(regions[region0].deltaX, 2);
-          this._units = 'cm²';
-        } else if (this._stack.frame[this._params.frameIndex].pixelSpacing) {
-          this._area /= 100;
-          this._units = 'cm²';
-        } else {
-          this._units = 'units';
-        }
-      } else if (this._units === 'cm²') {
-        this._area /= 100;
-      }
-
-      if (this._units === 'units' && !this._label.hasAttribute('title')) {
-        this._label.setAttribute('title', 'Calibration is required to display the area in cm²');
-        this._label.style.color = this._colors.error;
-      } else if (this._units !== 'units' && this._label.hasAttribute('title')) {
-        this._label.removeAttribute('title');
-        this._label.style.color = this._colors.text;
-      }
-      this._label.querySelector('.area').innerHTML = 'Area: ' + this._area.toFixed(2) + ' ' + this._units;
-
-      var rectData = this.getRectData(this._handles[0].screenPosition, this._handles[1].screenPosition);
-      var labelTransform = this.adjustLabelTransform(this._label, this._handles[1].screenPosition.clone().add(rectData.paddingVector.multiplyScalar(15 + this._label.offsetHeight / 2)));
-
-      // update rectangle
-      this._rectangle.style.transform = 'translate3D(' + rectData.transformX + 'px, ' + rectData.transformY + 'px, 0)';
-      this._rectangle.style.width = rectData.width + 'px';
-      this._rectangle.style.height = rectData.height + 'px';
-
-      // update label
-      this._label.style.transform = 'translate3D(' + labelTransform.x + 'px,' + labelTransform.y + 'px, 0)';
-    };
-
-    _class.prototype.free = function free() {
-      var _this3 = this;
-
-      this.removeEventListeners();
-
-      this._handles.forEach(function (h) {
-        _this3.remove(h);
-        h.free();
-      });
-      this._handles = [];
-
-      this._container.removeChild(this._rectangle);
-      this._container.removeChild(this._label);
-
-      // mesh, geometry, material
-      this.remove(this._mesh);
-      this._mesh.geometry.dispose();
-      this._mesh.geometry = null;
-      this._mesh.material.dispose();
-      this._mesh.material = null;
-      this._mesh = null;
-      this._geometry.dispose();
-      this._geometry = null;
-      this._material.vertexShader = null;
-      this._material.fragmentShader = null;
-      this._material.uniforms = null;
-      this._material.dispose();
-      this._material = null;
-
-      this._stack = null;
-
-      _Constructor.prototype.free.call(this);
-    };
-
-    _class.prototype.getMeasurements = function getMeasurements() {
-      return {
-        area: this._area,
-        units: this._units
-      };
-    };
-
-    _createClass(_class, [{
-      key: 'targetMesh',
-      get: function get() {
-        return this._targetMesh;
-      },
-      set: function set(targetMesh) {
-        this._targetMesh = targetMesh;
-        this._handles.forEach(function (elem) {
-          return elem.targetMesh = targetMesh;
-        });
-        this.update();
-      }
-    }, {
-      key: 'worldPosition',
-      get: function get() {
-        return this._worldPosition;
-      },
-      set: function set(worldPosition) {
-        this._handles[0].worldPosition.copy(worldPosition);
-        this._handles[1].worldPosition.copy(worldPosition);
-        this._worldPosition.copy(worldPosition);
-        this.update();
-      }
-    }, {
-      key: 'calibrationFactor',
-      get: function get() {
-        return this._calibrationFactor;
-      },
-      set: function set(calibrationFactor) {
-        this._calibrationFactor = calibrationFactor;
-        this._units = 'cm²';
-        this.update();
-      }
-    }]);
-
-    return _class;
-  }(Constructor);
-};
-
-
-/* harmony default export */ __webpack_exports__["default"] = (widgetsRectangle());
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.ruler.js":
-/*!**************************************!*\
-  !*** ./src/widgets/widgets.ruler.js ***!
-  \**************************************/
-/*! exports provided: widgetsRuler, default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "widgetsRuler", function() { return widgetsRuler; });
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.base */ "./src/widgets/widgets.base.ts");
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_widgets_base__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _widgets_handle__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./widgets.handle */ "./src/widgets/widgets.handle.js");
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-
-
-
-/**
- * @module widgets/ruler
- */
-var widgetsRuler = function widgetsRuler() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = Object(_widgets_base__WEBPACK_IMPORTED_MODULE_0__["widgetsBase"])(three);
-  return function (_Constructor) {
-    _inherits(_class, _Constructor);
-
-    function _class(targetMesh, controls) {
-      var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-      _classCallCheck(this, _class);
-
-      var _this = _possibleConstructorReturn(this, _Constructor.call(this, targetMesh, controls, params));
-
-      _this._widgetType = 'Ruler';
-
-      // incoming parameters (optional: lps2IJK, pixelSpacing, ultrasoundRegions, worldPosition)
-      _this._calibrationFactor = params.calibrationFactor || null;
-
-      // outgoing values
-      _this._distance = null;
-      _this._units = !_this._calibrationFactor && !params.pixelSpacing ? 'units' : 'mm';
-
-      _this._moving = false;
-      _this._domHovered = false;
-
-      // mesh stuff
-      _this._material = null;
-      _this._geometry = null;
-      _this._mesh = null;
-
-      // dom stuff
-      _this._line = null;
-      _this._label = null;
-
-      // add handles
-      _this._handles = [];
-      var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-
-      var handle = void 0;
-      for (var i = 0; i < 2; i++) {
-        handle = new WidgetsHandle(targetMesh, controls, params);
-        _this.add(handle);
-        _this._handles.push(handle);
-      }
-      _this._handles[1].active = true;
-      _this._handles[1].tracking = true;
-
-      _this._moveHandle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(_this._moveHandle);
-      _this._handles.push(_this._moveHandle);
-      _this._moveHandle.hide();
-
-      _this.create();
-
-      _this.onMove = _this.onMove.bind(_this);
-      _this.onHover = _this.onHover.bind(_this);
-      _this.addEventListeners();
-      return _this;
-    }
-
-    _class.prototype.addEventListeners = function addEventListeners() {
-      this._container.addEventListener('wheel', this.onMove);
-
-      this._line.addEventListener('mouseenter', this.onHover);
-      this._line.addEventListener('mouseleave', this.onHover);
-      this._label.addEventListener('mouseenter', this.onHover);
-      this._label.addEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.removeEventListeners = function removeEventListeners() {
-      this._container.removeEventListener('wheel', this.onMove);
-
-      this._line.removeEventListener('mouseenter', this.onHover);
-      this._line.removeEventListener('mouseleave', this.onHover);
-      this._label.removeEventListener('mouseenter', this.onHover);
-      this._label.removeEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.onHover = function onHover(evt) {
-      if (evt) {
-        this.hoverDom(evt);
-      }
-
-      this.hoverMesh();
-
-      this._hovered = this._handles[0].hovered || this._handles[1].hovered || this._domHovered;
-      this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-    };
-
-    _class.prototype.hoverMesh = function hoverMesh() {
-      // check raycast intersection, do we want to hover on mesh or just css?
-    };
-
-    _class.prototype.hoverDom = function hoverDom(evt) {
-      this._domHovered = evt.type === 'mouseenter';
-    };
-
-    _class.prototype.onStart = function onStart(evt) {
-      this._moveHandle.onMove(evt, true);
-
-      this._handles[0].onStart(evt);
-      this._handles[1].onStart(evt);
-
-      this._active = this._handles[0].active || this._handles[1].active || this._domHovered;
-
-      if (this._domHovered && !this._handles[1].tracking) {
-        this._moving = true;
-        this._controls.enabled = false;
-      }
-
-      this.update();
-    };
-
-    _class.prototype.onMove = function onMove(evt) {
-      var _this2 = this;
-
-      if (this._active) {
-        var prevPosition = this._moveHandle.worldPosition.clone();
-
-        this._dragged = true;
-        this._moveHandle.onMove(evt, true);
-
-        if (this._moving) {
-          this._handles.slice(0, -1).forEach(function (handle) {
-            handle.worldPosition.add(_this2._moveHandle.worldPosition.clone().sub(prevPosition));
-          });
-        }
-      } else {
-        this.onHover(null);
-      }
-
-      this._handles[0].onMove(evt);
-      this._handles[1].onMove(evt);
-
-      this.update();
-    };
-
-    _class.prototype.onEnd = function onEnd() {
-      this._handles[0].onEnd(); // First Handle
-
-      if (this._handles[1].tracking && this._handles[0].screenPosition.distanceTo(this._handles[1].screenPosition) < 10) {
-        return;
-      }
-
-      if (!this._dragged && this._active && !this._handles[1].tracking) {
-        this._selected = !this._selected; // change state if there was no dragging
-        this._handles[0].selected = this._selected;
-      }
-
-      // Second Handle
-      if (this._dragged || !this._handles[1].tracking) {
-        this._handles[1].tracking = false;
-        this._handles[1].onEnd();
-      } else {
-        this._handles[1].tracking = false;
-      }
-      this._handles[1].selected = this._selected;
-
-      this._active = this._handles[0].active || this._handles[1].active;
-      this._dragged = false;
-      this._moving = false;
-
-      this.update();
-    };
-
-    _class.prototype.create = function create() {
-      this.createMesh();
-      this.createDOM();
-    };
-
-    _class.prototype.createMesh = function createMesh() {
-      // geometry
-      this._geometry = new three.Geometry();
-      this._geometry.vertices.push(this._handles[0].worldPosition);
-      this._geometry.vertices.push(this._handles[1].worldPosition);
-
-      // material
-      this._material = new three.LineBasicMaterial();
-
-      this.updateMeshColor();
-
-      // mesh
-      this._mesh = new three.Line(this._geometry, this._material);
-      this._mesh.visible = true;
-
-      this.add(this._mesh);
-    };
-
-    _class.prototype.createDOM = function createDOM() {
-      this._line = document.createElement('div');
-      this._line.className = 'widgets-line';
-      this._container.appendChild(this._line);
-
-      this._label = document.createElement('div');
-      this._label.className = 'widgets-label';
-      this._container.appendChild(this._label);
-
-      this.updateDOMColor();
-    };
-
-    _class.prototype.hideDOM = function hideDOM() {
-      this._line.style.display = 'none';
-      this._label.style.display = 'none';
-      this._handles.forEach(function (elem) {
-        return elem.hideDOM();
-      });
-    };
-
-    _class.prototype.showDOM = function showDOM() {
-      this._line.style.display = '';
-      this._label.style.display = '';
-      this._handles[0].showDOM();
-      this._handles[1].showDOM();
-    };
-
-    _class.prototype.update = function update() {
-      this.updateColor();
-
-      this._handles[0].update();
-      this._handles[1].update();
-
-      // calculate values
-      var distanceData = this.getDistanceData(this._handles[0].worldPosition, this._handles[1].worldPosition, this._calibrationFactor);
-
-      this._distance = distanceData.distance;
-      if (distanceData.units) {
-        this._units = distanceData.units;
-      }
-
-      this.updateMeshColor();
-      this.updateMeshPosition();
-
-      this.updateDOM();
-    };
-
-    _class.prototype.updateMeshColor = function updateMeshColor() {
-      if (this._material) {
-        this._material.color.set(this._color);
-      }
-    };
-
-    _class.prototype.updateMeshPosition = function updateMeshPosition() {
-      if (this._geometry) {
-        this._geometry.verticesNeedUpdate = true;
-      }
-    };
-
-    _class.prototype.updateDOM = function updateDOM() {
-      this.updateDOMColor();
-
-      // update line
-      var lineData = this.getLineData(this._handles[0].screenPosition, this._handles[1].screenPosition);
-
-      this._line.style.transform = 'translate3D(' + lineData.transformX + 'px, ' + lineData.transformY + 'px, 0)\n      rotate(' + lineData.transformAngle + 'rad)';
-      this._line.style.width = lineData.length + 'px';
-
-      // update label
-      if (this._units === 'units' && !this._label.hasAttribute('title')) {
-        this._label.setAttribute('title', 'Calibration is required to display the distance in mm');
-        this._label.style.color = this._colors.error;
-      } else if (this._units !== 'units' && this._label.hasAttribute('title')) {
-        this._label.removeAttribute('title');
-        this._label.style.color = this._colors.text;
-      }
-      this._label.innerHTML = this._distance.toFixed(2) + ' ' + this._units;
-
-      var angle = Math.abs(lineData.transformAngle);
-      if (angle > Math.PI / 2) {
-        angle = Math.PI - angle;
-      }
-
-      var labelPadding = Math.tan(angle) < this._label.offsetHeight / this._label.offsetWidth ? this._label.offsetWidth / 2 / Math.cos(angle) + 15 // 5px for each handle + padding
-      : this._label.offsetHeight / 2 / Math.cos(Math.PI / 2 - angle) + 15;
-      var paddingVector = lineData.line.normalize().multiplyScalar(labelPadding);
-      var paddingPoint = lineData.length > labelPadding * 2 ? this._handles[1].screenPosition.clone().sub(paddingVector) : this._handles[1].screenPosition.clone().add(paddingVector);
-      var transform = this.adjustLabelTransform(this._label, paddingPoint);
-
-      this._label.style.transform = 'translate3D(' + transform.x + 'px, ' + transform.y + 'px, 0)';
-    };
-
-    _class.prototype.updateDOMColor = function updateDOMColor() {
-      this._line.style.backgroundColor = this._color;
-      this._label.style.borderColor = this._color;
-    };
-
-    _class.prototype.free = function free() {
-      var _this3 = this;
-
-      this.removeEventListeners();
-
-      this._handles.forEach(function (h) {
-        _this3.remove(h);
-        h.free();
-      });
-      this._handles = [];
-
-      this._container.removeChild(this._line);
-      this._container.removeChild(this._label);
-
-      // mesh, geometry, material
-      this.remove(this._mesh);
-      this._mesh.geometry.dispose();
-      this._mesh.geometry = null;
-      this._mesh.material.dispose();
-      this._mesh.material = null;
-      this._mesh = null;
-      this._geometry.dispose();
-      this._geometry = null;
-      this._material.vertexShader = null;
-      this._material.fragmentShader = null;
-      this._material.uniforms = null;
-      this._material.dispose();
-      this._material = null;
-
-      _Constructor.prototype.free.call(this);
-    };
-
-    _class.prototype.getMeasurements = function getMeasurements() {
-      return {
-        distance: this._distance,
-        units: this._units
-      };
-    };
-
-    _createClass(_class, [{
-      key: 'targetMesh',
-      get: function get() {
-        return this._targetMesh;
-      },
-      set: function set(targetMesh) {
-        this._targetMesh = targetMesh;
-        this._handles.forEach(function (elem) {
-          return elem.targetMesh = targetMesh;
-        });
-        this.update();
-      }
-    }, {
-      key: 'worldPosition',
-      get: function get() {
-        return this._worldPosition;
-      },
-      set: function set(worldPosition) {
-        this._handles[0].worldPosition.copy(worldPosition);
-        this._handles[1].worldPosition.copy(worldPosition);
-        this._worldPosition.copy(worldPosition);
-        this.update();
-      }
-    }, {
-      key: 'calibrationFactor',
-      get: function get() {
-        return this._calibrationFactor;
-      },
-      set: function set(calibrationFactor) {
-        this._calibrationFactor = calibrationFactor;
-        this._units = 'mm';
-        this.update();
-      }
-    }]);
-
-    return _class;
-  }(Constructor);
-};
-
-
-/* harmony default export */ __webpack_exports__["default"] = (widgetsRuler());
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.velocityTimeIntegral.js":
-/*!*****************************************************!*\
-  !*** ./src/widgets/widgets.velocityTimeIntegral.js ***!
-  \*****************************************************/
-/*! exports provided: widgetsVelocityTimeIntegral, default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "widgetsVelocityTimeIntegral", function() { return widgetsVelocityTimeIntegral; });
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.base */ "./src/widgets/widgets.base.ts");
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_widgets_base__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _widgets_handle__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./widgets.handle */ "./src/widgets/widgets.handle.js");
-/* harmony import */ var _core_core_utils__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../core/core.utils */ "./src/core/core.utils.js");
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-
-
-
-
-/**
- * @module widgets/velocityTimeIntegral
- */
-var widgetsVelocityTimeIntegral = function widgetsVelocityTimeIntegral() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = Object(_widgets_base__WEBPACK_IMPORTED_MODULE_0__["widgetsBase"])(three);
-  return function (_Constructor) {
-    _inherits(_class, _Constructor);
-
-    function _class(targetMesh, controls) {
-      var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-      _classCallCheck(this, _class);
-
-      var _this = _possibleConstructorReturn(this, _Constructor.call(this, targetMesh, controls, params));
-
-      _this._widgetType = 'VelocityTimeIntegral';
-
-      // incoming parameters (+ ijk2LPS, lps2IJK, worldPosition)
-      _this._regions = params.ultrasoundRegions || []; // required
-      if (_this._regions.length < 1) {
-        throw new Error('Ultrasound regions should not be empty!');
-      }
-
-      // outgoing values
-      _this._vMax = null; // Maximum Velocity (Vmax)
-      _this._vMean = null; // Mean Velocity (Vmean)
-      _this._gMax = null; // Maximum Gradient (Gmax)
-      _this._gMean = null; // Mean Gradient (Gmean)
-      _this._envTi = null; // Envelope Duration (Env.Ti)
-      _this._vti = null; // Velocity Time Integral (VTI)
-      _this._extraInfo = null; // extra information which is added to label
-
-      _this._initialized = false; // set to true onEnd if number of handles > 2
-      _this._isHandleActive = true;
-      _this._domHovered = false;
-      _this._initialRegion = _this.getRegionByXY(_this._regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(params.lps2IJK, params.worldPosition));
-      if (_this._initialRegion === null) {
-        throw new Error('Invalid initial UltraSound region!');
-      }
-      _this._usPoints = [];
-
-      // mesh stuff
-      _this._material = null;
-      _this._geometry = null;
-      _this._mesh = null;
-
-      // dom stuff
-      _this._lines = [];
-      _this._label = null;
-
-      // add handles
-      _this._handles = [];
-      var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-
-      var handle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(handle);
-      _this._handles.push(handle);
-
-      _this._moveHandle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(_this._moveHandle);
-      _this._moveHandle.hide();
-
-      _this.onMove = _this.onMove.bind(_this);
-      _this.onHover = _this.onHover.bind(_this);
-
-      _this.create();
-
-      _this.addEventListeners();
-      return _this;
-    }
-
-    _class.prototype.addEventListeners = function addEventListeners() {
-      this._container.addEventListener('wheel', this.onMove);
-
-      this._label.addEventListener('mouseenter', this.onHover);
-      this._label.addEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.removeEventListeners = function removeEventListeners() {
-      this._container.removeEventListener('wheel', this.onMove);
-
-      this._label.removeEventListener('mouseenter', this.onHover);
-      this._label.removeEventListener('mouseleave', this.onHover);
-    };
-
-    _class.prototype.onHover = function onHover(evt) {
-      if (evt) {
-        this.hoverDom(evt);
-      }
-
-      this.hoverMesh();
-
-      var hovered = false;
-
-      this._handles.forEach(function (elem) {
-        return hovered = hovered || elem.hovered;
-      });
-
-      this._hovered = hovered || this._domHovered;
-      this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-    };
-
-    _class.prototype.hoverMesh = function hoverMesh() {
-      // check raycast intersection, if we want to hover on mesh instead of just css
-    };
-
-    _class.prototype.hoverDom = function hoverDom(evt) {
-      this._domHovered = evt.type === 'mouseenter';
-    };
-
-    _class.prototype.onStart = function onStart(evt) {
-      var active = false;
-
-      this._moveHandle.onMove(evt, true);
-      this._handles.forEach(function (elem) {
-        elem.onStart(evt);
-        active = active || elem.active;
-      });
-
-      this._active = active || this._domHovered;
-      this._isHandleActive = active;
-
-      if (this._domHovered) {
-        this._controls.enabled = false;
-      }
-
-      this.update();
-    };
-
-    _class.prototype.onMove = function onMove(evt) {
-      if (this.active) {
-        var prevPosition = this._moveHandle.worldPosition.clone();
-
-        this._moveHandle.onMove(evt, true);
-
-        var shift = this._moveHandle.worldPosition.clone().sub(prevPosition);
-
-        if (!this.isCorrectRegion(shift)) {
-          this._moveHandle.worldPosition.copy(prevPosition);
-
-          return;
-        }
-
-        if (!this._initialized) {
-          this._handles[this._handles.length - 1].hovered = false;
-          this._handles[this._handles.length - 1].active = false;
-          this._handles[this._handles.length - 1].tracking = false;
-
-          var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-          var handle = new WidgetsHandle(this._targetMesh, this._controls, this._params);
-
-          handle.hovered = true;
-          handle.active = true;
-          handle.tracking = true;
-          this.add(handle);
-          this._handles.push(handle);
-
-          this.createLine();
-        } else {
-          this.updateDOMContent(true);
-
-          if (!this._isHandleActive || this._handles[this._handles.length - 2].active || this._handles[this._handles.length - 1].active) {
-            this._handles.forEach(function (handle) {
-              handle.worldPosition.add(shift);
-            });
-            this._isHandleActive = false;
-            this._handles[this._handles.length - 2].active = false;
-            this._handles[this._handles.length - 1].active = false;
-            this._controls.enabled = false;
-          }
-        }
-        this._dragged = true;
-      } else {
-        this.onHover(null);
-      }
-
-      this._handles.forEach(function (elem) {
-        elem.onMove(evt);
-      });
-      if (this.active && this._handles.length > 2) {
-        this.pushPopHandle();
-      }
-      this.update();
-    };
-
-    _class.prototype.onEnd = function onEnd() {
-      var _this2 = this;
-
-      if (this._handles.length < 3) {
-        return;
-      }
-
-      var active = false;
-
-      this._handles.slice(0, -1).forEach(function (elem) {
-        elem.onEnd();
-        active = active || elem.active;
-      });
-
-      // Last Handle
-      if (this._dragged || !this._handles[this._handles.length - 1].tracking) {
-        this._handles[this._handles.length - 1].tracking = false;
-        this._handles[this._handles.length - 1].onEnd();
-      } else {
-        this._handles[this._handles.length - 1].tracking = false;
-      }
-
-      if (this._dragged || !this._initialized) {
-        this.finalize();
-        this.updateDOMContent();
-      }
-
-      if (!this._dragged && this._active) {
-        this._selected = !this._selected; // change state if there was no dragging
-        this._handles.forEach(function (elem) {
-          return elem.selected = _this2._selected;
-        });
-      }
-      this._active = active || this._handles[this._handles.length - 1].active;
-      this._isHandleActive = active;
-      this._dragged = false;
-      this._initialized = true;
-
-      this.update();
-    };
-
-    _class.prototype.isCorrectRegion = function isCorrectRegion(shift) {
-      var _this3 = this;
-
-      var isCorrect = true;
-
-      this._handles.forEach(function (handle, index) {
-        if (handle.active || !_this3._isHandleActive) {
-          isCorrect = isCorrect && _this3.checkHandle(index, shift);
-        }
-      });
-
-      return isCorrect;
-    };
-
-    _class.prototype.checkHandle = function checkHandle(index, shift) {
-      var region = this.getRegionByXY(this._regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(this._params.lps2IJK, this._handles[index].worldPosition.clone().add(shift)));
-
-      return region !== null && region === this._initialRegion && this._regions[region].unitsY === 'cm/sec';
-    };
-
-    _class.prototype.create = function create() {
-      this.createMaterial();
-      this.createDOM();
-    };
-
-    _class.prototype.createMaterial = function createMaterial() {
-      this._material = new three.LineBasicMaterial();
-    };
-
-    _class.prototype.createDOM = function createDOM() {
-      this._label = document.createElement('div');
-      this._label.className = 'widgets-label';
-
-      var measurementsContainer = document.createElement('div');
-
-      ['vmax', 'vmean', 'gmax', 'gmean', 'envti', 'vti', 'info'].forEach(function (name) {
-        var div = document.createElement('div');
-
-        div.className = name;
-        measurementsContainer.appendChild(div);
-      });
-      this._label.appendChild(measurementsContainer);
-
-      this._container.appendChild(this._label);
-
-      this.updateDOMColor();
-    };
-
-    _class.prototype.createLine = function createLine() {
-      var line = document.createElement('div');
-
-      line.className = 'widgets-line';
-      line.addEventListener('mouseenter', this.onHover);
-      line.addEventListener('mouseleave', this.onHover);
-      this._lines.push(line);
-      this._container.appendChild(line);
-    };
-
-    _class.prototype.pushPopHandle = function pushPopHandle() {
-      var handle0 = this._handles[this._handles.length - 3];
-      var handle1 = this._handles[this._handles.length - 2];
-      var newhandle = this._handles[this._handles.length - 1];
-      var isOnLine = this.isPointOnLine(handle0.worldPosition, handle1.worldPosition, newhandle.worldPosition);
-
-      if (isOnLine || handle0.screenPosition.distanceTo(newhandle.screenPosition) < 25) {
-        this.remove(handle1);
-        handle1.free();
-
-        this._handles[this._handles.length - 2] = newhandle;
-        this._handles.pop();
-
-        this._container.removeChild(this._lines.pop());
-      }
-
-      return isOnLine;
-    };
-
-    _class.prototype.isPointOnLine = function isPointOnLine(pointA, pointB, pointToCheck) {
-      return !new three.Vector3().crossVectors(pointA.clone().sub(pointToCheck), pointB.clone().sub(pointToCheck)).length();
-    };
-
-    _class.prototype.finalize = function finalize() {
-      var _this4 = this;
-
-      if (this._initialized) {
-        // remove old axis handles
-        this._handles.splice(-2).forEach(function (elem) {
-          _this4.remove(elem);
-          elem.free();
-        });
-      }
-
-      var pointF = _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(this._params.lps2IJK, this._handles[0]._worldPosition);
-      var pointL = _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(this._params.lps2IJK, this._handles[this._handles.length - 1]._worldPosition);
-      var region = this._regions[this.getRegionByXY(this._regions, pointF)];
-      var axisY = region.y0 + (region.axisY || 0); // data coordinate equal to US region's zero Y coordinate
-
-      var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-      var params = { hideHandleMesh: this._params.hideHandleMesh || false };
-
-      pointF.y = axisY;
-      pointL.y = axisY;
-      this._usPoints = [this.getPointInRegion(region, pointL), this.getPointInRegion(region, pointF)];
-
-      params.worldPosition = pointL.applyMatrix4(this._params.ijk2LPS); // projection of last point on Y axis
-      this._handles.push(new WidgetsHandle(this._targetMesh, this._controls, params));
-      this.add(this._handles[this._handles.length - 1]);
-
-      params.worldPosition = pointF.applyMatrix4(this._params.ijk2LPS); // projection of first point on Y axis
-      this._handles.push(new WidgetsHandle(this._targetMesh, this._controls, params));
-      this.add(this._handles[this._handles.length - 1]);
-
-      while (this._lines.length < this._handles.length) {
-        this.createLine();
-      }
-    };
-
-    _class.prototype.update = function update() {
-      this.updateColor();
-
-      // update handles
-      this._handles.forEach(function (elem) {
-        return elem.update();
-      });
-
-      // mesh stuff
-      this.updateMesh();
-
-      // DOM stuff
-      this.updateDOMColor();
-      this.updateDOMPosition();
-    };
-
-    _class.prototype.updateValues = function updateValues() {
-      var _this5 = this;
-
-      var region = this._regions[this.getRegionByXY(this._regions, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(this._params.lps2IJK, this._handles[0]._worldPosition))];
-      var boundaries = {
-        xMin: Number.POSITIVE_INFINITY,
-        xMax: Number.NEGATIVE_INFINITY,
-        yMin: Number.POSITIVE_INFINITY,
-        yMax: Number.NEGATIVE_INFINITY
-      };
-      var pVelocity = void 0;
-      var pGradient = void 0;
-      var pTime = void 0;
-      var totalTime = 0;
-
-      this._vMax = 0;
-      this._vMean = 0;
-      this._gMean = 0;
-      this._usPoints.splice(2);
-      this._handles.slice(0, -2).forEach(function (elem) {
-        var usPosition = _this5.getPointInRegion(region, _core_core_utils__WEBPACK_IMPORTED_MODULE_2__["default"].worldToData(_this5._params.lps2IJK, elem._worldPosition));
-        var velocity = Math.abs(usPosition.y / 100);
-        var gradient = 4 * Math.pow(velocity, 2);
-
-        if (_this5._vMax === null || velocity > _this5._vMax) {
-          _this5._vMax = velocity;
-        }
-        boundaries.xMin = Math.min(usPosition.x, boundaries.xMin);
-        boundaries.xMax = Math.max(usPosition.x, boundaries.xMax);
-        boundaries.yMin = Math.min(usPosition.y, boundaries.yMin);
-        boundaries.yMax = Math.max(usPosition.y, boundaries.yMax);
-
-        if (pTime) {
-          var length = Math.abs(usPosition.x - pTime);
-
-          totalTime += length;
-          _this5._vMean += length * (pVelocity + velocity) / 2;
-          _this5._gMean += length * (pGradient + gradient) / 2;
-        }
-
-        pVelocity = velocity;
-        pGradient = gradient;
-        pTime = usPosition.x;
-        _this5._usPoints.push(usPosition);
-      });
-
-      this._gMax = 4 * Math.pow(this._vMax, 2);
-      this._vMean /= totalTime;
-      this._gMean /= totalTime;
-      this._envTi = totalTime * 1000;
-      this._vti = this.getArea(this._usPoints);
-
-      this._shapeWarn = boundaries.xMax - boundaries.xMin !== totalTime || boundaries.yMin < 0 !== boundaries.yMax < 0;
-    };
-
-    _class.prototype.updateMesh = function updateMesh() {
-      var _this6 = this;
-
-      if (this._mesh) {
-        this.remove(this._mesh);
-      }
-
-      this._geometry = new three.Geometry();
-      this._handles.forEach(function (elem) {
-        return _this6._geometry.vertices.push(elem.worldPosition);
-      });
-      this._geometry.vertices.push(this._handles[0].worldPosition);
-      this._geometry.verticesNeedUpdate = true;
-
-      this.updateMeshColor();
-
-      this._mesh = new three.Line(this._geometry, this._material);
-      this._mesh.visible = true;
-      this.add(this._mesh);
-    };
-
-    _class.prototype.updateMeshColor = function updateMeshColor() {
-      if (this._material) {
-        this._material.color.set(this._color);
-      }
-    };
-
-    _class.prototype.updateDOMColor = function updateDOMColor() {
-      var _this7 = this;
-
-      if (this._handles.length >= 2) {
-        this._lines.forEach(function (elem) {
-          return elem.style.backgroundColor = _this7._color;
-        });
-      }
-      this._label.style.borderColor = this._color;
-    };
-
-    _class.prototype.updateDOMContent = function updateDOMContent(clear) {
-      var vMaxContainer = this._label.querySelector('.vmax');
-      var vMeanContainer = this._label.querySelector('.vmean');
-      var gMaxContainer = this._label.querySelector('.gmax');
-      var gMeanContainer = this._label.querySelector('.gmean');
-      var envTiContainer = this._label.querySelector('.envti');
-      var vtiContainer = this._label.querySelector('.vti');
-      var infoContainer = this._label.querySelector('.info');
-
-      if (clear) {
-        vMaxContainer.innerHTML = '';
-        vMeanContainer.innerHTML = '';
-        gMaxContainer.innerHTML = '';
-        gMeanContainer.innerHTML = '';
-        envTiContainer.innerHTML = '';
-        vtiContainer.innerHTML = '';
-        infoContainer.innerHTML = '';
-
-        return;
-      }
-
-      this.updateValues();
-
-      if (this._shapeWarn && !this._label.hasAttribute('title')) {
-        this._label.setAttribute('title', 'Values may be incorrect due to invalid curve.');
-        this._label.style.color = this._colors.error;
-      } else if (!this._shapeWarn && this._label.hasAttribute('title')) {
-        this._label.removeAttribute('title');
-        this._label.style.color = this._colors.text;
-      }
-
-      vMaxContainer.innerHTML = 'Vmax: ' + this._vMax.toFixed(2) + ' m/s';
-      vMeanContainer.innerHTML = 'Vmean: ' + this._vMean.toFixed(2) + ' m/s';
-      gMaxContainer.innerHTML = 'Gmax: ' + this._gMax.toFixed(2) + ' mmhg';
-      gMeanContainer.innerHTML = 'Gmean: ' + this._gMean.toFixed(2) + ' mmhg';
-      envTiContainer.innerHTML = 'Env.Ti: ' + this._envTi.toFixed(1) + ' ms';
-      vtiContainer.innerHTML = 'VTI: ' + this._vti.toFixed(2) + ' cm';
-      infoContainer.innerHTML = this._extraInfo;
-    };
-
-    _class.prototype.updateDOMPosition = function updateDOMPosition() {
-      var _this8 = this;
-
-      if (this._handles.length < 2) {
-        return;
-      }
-      // update lines and get coordinates of lowest handle
-      var labelPosition = null;
-
-      this._lines.forEach(function (elem, ind) {
-        var lineData = _this8.getLineData(_this8._handles[ind].screenPosition, _this8._handles[ind + 1 === _this8._handles.length ? 0 : ind + 1].screenPosition);
-
-        elem.style.transform = 'translate3D(' + lineData.transformX + 'px, ' + lineData.transformY + 'px, 0)\n                    rotate(' + lineData.transformAngle + 'rad)';
-        elem.style.width = lineData.length + 'px';
-
-        if (labelPosition === null || labelPosition.y < _this8._handles[ind].screenPosition.y) {
-          labelPosition = _this8._handles[ind].screenPosition.clone();
-        }
-      });
-
-      if (!this._initialized) {
-        return;
-      }
-
-      // update label
-      labelPosition.y += 15 + this._label.offsetHeight / 2;
-      labelPosition = this.adjustLabelTransform(this._label, labelPosition);
-
-      this._label.style.transform = 'translate3D(' + labelPosition.x + 'px, ' + labelPosition.y + 'px, 0)';
-    };
-
-    _class.prototype.hideDOM = function hideDOM() {
-      this._handles.forEach(function (elem) {
-        return elem.hideDOM();
-      });
-
-      this._lines.forEach(function (elem) {
-        return elem.style.display = 'none';
-      });
-      this._label.style.display = 'none';
-    };
-
-    _class.prototype.showDOM = function showDOM() {
-      this._handles.forEach(function (elem) {
-        return elem.showDOM();
-      });
-
-      this._lines.forEach(function (elem) {
-        return elem.style.display = '';
-      });
-      this._label.style.display = '';
-    };
-
-    _class.prototype.free = function free() {
-      var _this9 = this;
-
-      this.removeEventListeners();
-
-      this._handles.forEach(function (elem) {
-        _this9.remove(elem);
-        elem.free();
-      });
-      this._handles = [];
-      this._usPoints = [];
-
-      this.remove(this._moveHandle);
-      this._moveHandle.free();
-      this._moveHandle = null;
-
-      this._lines.forEach(function (elem) {
-        elem.removeEventListener('mouseenter', _this9.onHover);
-        elem.removeEventListener('mouseleave', _this9.onHover);
-        _this9._container.removeChild(elem);
-      });
-      this._lines = [];
-      this._container.removeChild(this._label);
-
-      // mesh, geometry, material
-      if (this._mesh) {
-        this.remove(this._mesh);
-        this._mesh.geometry.dispose();
-        this._mesh.geometry = null;
-        this._mesh.material.dispose();
-        this._mesh.material = null;
-        this._mesh = null;
-      }
-      if (this._geometry) {
-        this._geometry.dispose();
-        this._geometry = null;
-      }
-      this._material.vertexShader = null;
-      this._material.fragmentShader = null;
-      this._material.uniforms = null;
-      this._material.dispose();
-      this._material = null;
-
-      _Constructor.prototype.free.call(this);
-    };
-
-    _class.prototype.getMeasurements = function getMeasurements() {
-      return {
-        vMax: this._vMax,
-        vMean: this._vMean,
-        gMax: this._gMax,
-        gMean: this._gMean,
-        envTi: this._envTi,
-        vti: this._vti
-      };
-    };
-
-    _createClass(_class, [{
-      key: 'targetMesh',
-      get: function get() {
-        return this._targetMesh;
-      },
-      set: function set(targetMesh) {
-        this._targetMesh = targetMesh;
-        this._handles.forEach(function (elem) {
-          return elem.targetMesh = targetMesh;
-        });
-        this._moveHandle.targetMesh = targetMesh;
-        this.update();
-      }
-    }, {
-      key: 'worldPosition',
-      get: function get() {
-        return this._worldPosition;
-      },
-      set: function set(worldPosition) {
-        this._handles.forEach(function (elem) {
-          return elem._worldPosition.copy(worldPosition);
-        });
-        this._worldPosition.copy(worldPosition);
-        this.update();
-      }
-    }, {
-      key: 'extraInfo',
-      get: function get() {
-        return this._extraInfo;
-      },
-      set: function set(info) {
-        this._extraInfo = info;
-        this._label.querySelector('.info').innerHTML = info;
-      }
-    }]);
-
-    return _class;
-  }(Constructor);
-};
-
-
-/* harmony default export */ __webpack_exports__["default"] = (widgetsVelocityTimeIntegral());
-
-/***/ }),
-
-/***/ "./src/widgets/widgets.voxelProbe.js":
-/*!*******************************************!*\
-  !*** ./src/widgets/widgets.voxelProbe.js ***!
-  \*******************************************/
-/*! exports provided: widgetsVoxelprobe, default */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-__webpack_require__.r(__webpack_exports__);
-/* harmony export (binding) */ __webpack_require__.d(__webpack_exports__, "widgetsVoxelprobe", function() { return widgetsVoxelprobe; });
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ./widgets.base */ "./src/widgets/widgets.base.ts");
-/* harmony import */ var _widgets_base__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(_widgets_base__WEBPACK_IMPORTED_MODULE_0__);
-/* harmony import */ var _widgets_handle__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ./widgets.handle */ "./src/widgets/widgets.handle.js");
-/* harmony import */ var _models_models_voxel__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../models/models.voxel */ "./src/models/models.voxel.js");
-/* harmony import */ var _core_core_utils__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../core/core.utils */ "./src/core/core.utils.js");
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
-
-function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
-
-
-
-
-
-
-/**
- * @module widgets/voxelProbe
- */
-var widgetsVoxelprobe = function widgetsVoxelprobe() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = Object(_widgets_base__WEBPACK_IMPORTED_MODULE_0__["widgetsBase"])(three);
-  return function (_Constructor) {
-    _inherits(_class, _Constructor);
-
-    function _class(targetMesh, controls) {
-      var params = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
-
-      _classCallCheck(this, _class);
-
-      var _this = _possibleConstructorReturn(this, _Constructor.call(this, targetMesh, controls, params));
-
-      _this._widgetType = 'VoxelProbe';
-
-      // incoming parameters (optional: worldPosition)
-      _this._stack = params.stack; // required
-
-      _this._container.style.cursor = 'pointer';
-      _this._controls.enabled = false; // controls should be disabled for widgets with a single handle
-      _this._initialized = false; // set to true onEnd
-      _this._active = true;
-      _this._moving = true;
-      _this._domHovered = false;
-
-      // dom stuff
-      _this._label = null;
-
-      // handle (represent voxel)
-      var WidgetsHandle = Object(_widgets_handle__WEBPACK_IMPORTED_MODULE_1__["widgetsHandle"])(three);
-      _this._handle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(_this._handle);
-
-      _this._moveHandle = new WidgetsHandle(targetMesh, controls, params);
-      _this.add(_this._moveHandle);
-      _this._moveHandle.hide();
-
-      _this.create();
-
-      // event listeners
-      _this.onMove = _this.onMove.bind(_this);
-      _this.onHover = _this.onHover.bind(_this);
-      _this.addEventListeners();
-      return _this;
-    }
-
-    _class.prototype.addEventListeners = function addEventListeners() {
-      this._label.addEventListener('mouseenter', this.onHover);
-      this._label.addEventListener('mouseleave', this.onHover);
-
-      this._container.addEventListener('wheel', this.onMove);
-    };
-
-    _class.prototype.removeEventListeners = function removeEventListeners() {
-      this._label.removeEventListener('mouseenter', this.onHover);
-      this._label.removeEventListener('mouseleave', this.onHover);
-
-      this._container.removeEventListener('wheel', this.onMove);
-    };
-
-    _class.prototype.onStart = function onStart(evt) {
-      this._moveHandle.onMove(evt, true);
-      this._handle.onStart(evt);
-
-      this._active = this._handle.active || this._domHovered;
-
-      if (this._domHovered) {
-        this._moving = true;
-        this._controls.enabled = false;
-      }
-
-      this.update();
-    };
-
-    _class.prototype.onMove = function onMove(evt) {
-      if (this._active) {
-        var prevPosition = this._moveHandle.worldPosition.clone();
-
-        this._dragged = true;
-        this._moveHandle.onMove(evt, true);
-
-        if (this._moving) {
-          this._handle.worldPosition.add(this._moveHandle.worldPosition.clone().sub(prevPosition));
-        }
-      } else {
-        this.onHover(null);
-      }
-
-      this._handle.onMove(evt);
-
-      this.update();
-    };
-
-    _class.prototype.onEnd = function onEnd() {
-      this._handle.onEnd();
-
-      if (!this._dragged && this._active && this._initialized) {
-        this._selected = !this._selected; // change state if there was no dragging
-        this._handle.selected = this._selected;
-      }
-
-      this._initialized = true;
-      this._active = this._handle.active;
-      this._dragged = false;
-      this._moving = false;
-
-      this.update();
-    };
-
-    _class.prototype.onHover = function onHover(evt) {
-      if (evt) {
-        this.hoverDom(evt);
-      }
-
-      this._hovered = this._handle.hovered || this._domHovered;
-      this._container.style.cursor = this._hovered ? 'pointer' : 'default';
-    };
-
-    _class.prototype.hoverDom = function hoverDom(evt) {
-      this._domHovered = evt.type === 'mouseenter';
-    };
-
-    _class.prototype.create = function create() {
-      this.createVoxel();
-      this.createDOM();
-    };
-
-    _class.prototype.createVoxel = function createVoxel() {
-      this._voxel = new _models_models_voxel__WEBPACK_IMPORTED_MODULE_2__["default"]();
-      this._voxel.id = this.id;
-    };
-
-    _class.prototype.createDOM = function createDOM() {
-      this._label = document.createElement('div');
-      this._label.className = 'widgets-label';
-
-      // measurements
-      var measurementsContainer = document.createElement('div');
-      // LPS
-      var lpsContainer = document.createElement('div');
-      lpsContainer.className = 'lpsPosition';
-      measurementsContainer.appendChild(lpsContainer);
-      // IJK
-      var ijkContainer = document.createElement('div');
-      ijkContainer.className = 'ijkPosition';
-      measurementsContainer.appendChild(ijkContainer);
-      // Value
-      var valueContainer = document.createElement('div');
-      valueContainer.className = 'value';
-      measurementsContainer.appendChild(valueContainer);
-
-      this._label.appendChild(measurementsContainer);
-
-      this._container.appendChild(this._label);
-
-      this.updateDOMColor();
-    };
-
-    _class.prototype.update = function update() {
-      this.updateColor();
-
-      this._handle.update();
-      this._worldPosition.copy(this._handle.worldPosition);
-
-      this.updateVoxel(); // set data coordinates && value
-
-      this.updateDOM();
-    };
-
-    _class.prototype.updateVoxel = function updateVoxel() {
-      this._voxel.worldCoordinates = this._worldPosition;
-      this._voxel.dataCoordinates = _core_core_utils__WEBPACK_IMPORTED_MODULE_3__["default"].worldToData(this._stack.lps2IJK, this._worldPosition);
-
-      // update value
-      var value = _core_core_utils__WEBPACK_IMPORTED_MODULE_3__["default"].getPixelData(this._stack, this._voxel.dataCoordinates);
-
-      this._voxel.value = value === null || this._stack.numberOfChannels > 1 ? 'NA' // coordinates outside the image or RGB
-      : _core_core_utils__WEBPACK_IMPORTED_MODULE_3__["default"].rescaleSlopeIntercept(value, this._stack.rescaleSlope, this._stack.rescaleIntercept).toFixed();
-    };
-
-    _class.prototype.updateDOM = function updateDOM() {
-      var rasContainer = this._label.querySelector('.lpsPosition');
-      var ijkContainer = this._label.querySelector('.ijkPosition');
-      var valueContainer = this._label.querySelector('.value');
-
-      rasContainer.innerHTML = 'LPS: \n      ' + this._voxel.worldCoordinates.x.toFixed(2) + ' :\n      ' + this._voxel.worldCoordinates.y.toFixed(2) + ' :\n      ' + this._voxel.worldCoordinates.z.toFixed(2);
-      ijkContainer.innerHTML = 'IJK: \n      ' + this._voxel.dataCoordinates.x + ' :\n      ' + this._voxel.dataCoordinates.y + ' :\n      ' + this._voxel.dataCoordinates.z;
-      valueContainer.innerHTML = 'Value: ' + this._voxel.value;
-
-      this.updateDOMColor();
-
-      var transform = this.adjustLabelTransform(this._label, this._handle.screenPosition, true);
-
-      this._label.style.transform = 'translate3D(' + transform.x + 'px, ' + transform.y + 'px, 0)';
-    };
-
-    _class.prototype.updateDOMColor = function updateDOMColor() {
-      this._label.style.borderColor = this._color;
-    };
-
-    _class.prototype.free = function free() {
-      this.removeEventListeners();
-
-      this.remove(this._handle);
-      this._handle.free();
-      this._handle = null;
-      this.remove(this._moveHandle);
-      this._moveHandle.free();
-      this._moveHandle = null;
-
-      this._container.removeChild(this._label);
-
-      this._stack = null;
-      this._voxel = null;
-
-      _Constructor.prototype.free.call(this);
-    };
-
-    _class.prototype.hideDOM = function hideDOM() {
-      this._label.style.display = 'none';
-      this._handle.hideDOM();
-    };
-
-    _class.prototype.showDOM = function showDOM() {
-      this._label.style.display = '';
-      this._handle.showDOM();
-    };
-
-    _createClass(_class, [{
-      key: 'targetMesh',
-      get: function get() {
-        return this._targetMesh;
-      },
-      set: function set(targetMesh) {
-        this._targetMesh = targetMesh;
-        this._handle.targetMesh = targetMesh;
-        this._moveHandle.targetMesh = targetMesh;
-        this.update();
-      }
-    }, {
-      key: 'worldPosition',
-      get: function get() {
-        return this._worldPosition;
-      },
-      set: function set(worldPosition) {
-        this._handle.worldPosition.copy(worldPosition);
-        this._moveHandle.worldPosition.copy(worldPosition);
-        this._worldPosition.copy(worldPosition);
-        this.update();
-      }
-    }, {
-      key: 'active',
-      get: function get() {
-        return this._active;
-      },
-      set: function set(active) {
-        this._active = active;
-        this._controls.enabled = !this._active;
-
-        this.update();
-      }
-    }]);
-
-    return _class;
-  }(Constructor);
-};
-
-
-/* harmony default export */ __webpack_exports__["default"] = (widgetsVoxelprobe());
 
 /***/ }),
 
