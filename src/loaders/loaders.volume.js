@@ -283,32 +283,32 @@ export default class LoadersVolumes extends LoadersBase {
   _parser(extension) {
     let Parser = null;
 
-    switch (extension.toUpperCase()) {
-      case 'NII':
-      case 'NII_':
+    // switch (extension.toUpperCase()) {
+      // case 'NII':
+      // case 'NII_':
         Parser = ParsersNifti;
-        break;
-      case 'DCM':
-      case 'DIC':
-      case 'DICOM':
-      case 'IMA':
-      case '':
-        Parser = ParsersDicom;
-        break;
-      case 'MHD':
-        Parser = ParsersMhd;
-        break;
-      case 'NRRD':
-        Parser = ParsersNrrd;
-        break;
-      case 'MGH':
-      case 'MGZ':
-        Parser = ParsersMgh;
-        break;
-      default:
-        console.warn('unsupported extension: ' + extension);
-        return false;
-    }
+      //   break;
+      // case 'DCM':
+      // case 'DIC':
+      // case 'DICOM':
+      // case 'IMA':
+      // case '':
+      //   Parser = ParsersDicom;
+      //   break;
+      // case 'MHD':
+      //   Parser = ParsersMhd;
+      //   break;
+      // case 'NRRD':
+      //   Parser = ParsersNrrd;
+      //   break;
+      // case 'MGH':
+      // case 'MGZ':
+      //   Parser = ParsersMgh;
+      //   break;
+      // default:
+      //   console.warn('unsupported extension: ' + extension);
+      //   return false;
+    // }
     return Parser;
   }
 
