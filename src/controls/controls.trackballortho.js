@@ -4,13 +4,10 @@
  * @author Patrick Fuller / http://patrick-fuller.com
  * @author Max Smolens / https://github.com/msmolens
  */
+import {EventDispatcher, Vector2, Vector3} from 'three'
+const trackballOrtho = () => {
 
-const trackballOrtho = (three = window.THREE) => {
-  if (three === undefined || three.EventDispatcher === undefined) {
-    return null;
-  }
-
-  const Constructor = three.EventDispatcher;
+  const Constructor = EventDispatcher;
   return class extends Constructor {
     constructor(
       object,
@@ -53,7 +50,7 @@ const trackballOrtho = (three = window.THREE) => {
 
       // internals
 
-      this.target = new three.Vector3();
+      this.target = new Vector3();
 
       let EPS = 0.000001;
 
@@ -61,13 +58,13 @@ const trackballOrtho = (three = window.THREE) => {
 
       let _state = STATE.NONE,
         _prevState = STATE.NONE,
-        _eye = new three.Vector3(),
-        _zoomStart = new three.Vector2(),
-        _zoomEnd = new three.Vector2(),
+        _eye = new Vector3(),
+        _zoomStart = new Vector2(),
+        _zoomEnd = new Vector2(),
         _touchZoomDistanceStart = 0,
         _touchZoomDistanceEnd = 0,
-        _panStart = new three.Vector2(),
-        _panEnd = new three.Vector2();
+        _panStart = new Vector2(),
+        _panEnd = new Vector2();
 
       // window level fire after...
 
@@ -121,7 +118,7 @@ const trackballOrtho = (three = window.THREE) => {
       };
 
       let getMouseOnScreen = (function() {
-        let vector = new three.Vector2();
+        let vector = new Vector2();
 
         return function getMouseOnScreen(pageX, pageY) {
           vector.set(
@@ -159,9 +156,9 @@ const trackballOrtho = (three = window.THREE) => {
       };
 
       this.panCamera = (function() {
-        let mouseChange = new three.Vector2(),
-          objectUp = new three.Vector3(),
-          pan = new three.Vector3();
+        let mouseChange = new Vector2(),
+          objectUp = new Vector3(),
+          pan = new Vector3();
 
         return function panCamera() {
           mouseChange.copy(_panEnd).sub(_panStart);

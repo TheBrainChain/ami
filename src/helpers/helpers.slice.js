@@ -5,23 +5,20 @@ import ShadersVertex from '../shaders/shaders.data.vertex';
 import ShadersFragment from '../shaders/shaders.data.fragment';
 
 import { helpersMaterialMixin } from '../helpers/helpers.material.mixin';
-
+import {Object3D, Vector3, Color, Matrix4, DoubleSide, Mesh, Vector4} from 'three'
 /**
  * @module helpers/slice
  */
 
-const helpersSlice = (three = window.THREE) => {
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
+const helpersSlice = () => {
 
-  const Constructor = helpersMaterialMixin(three);
+  const Constructor = helpersMaterialMixin();
   return class extends Constructor {
     constructor(
       stack,
       index = 0,
-      position = new three.Vector3(0, 0, 0),
-      direction = new three.Vector3(0, 0, 1),
+      position = new Vector3(0, 0, 0),
+      direction = new Vector3(0, 0, 1),
       aabbSpace = 'IJK'
     ) {
       //
@@ -317,7 +314,7 @@ const helpersSlice = (three = window.THREE) => {
 
     set borderColor(borderColor) {
       this._borderColor = borderColor;
-      this._uniforms.uBorderColor.value = new three.Color(borderColor);
+      this._uniforms.uBorderColor.value = new Color(borderColor);
     }
 
     get borderColor() {
@@ -331,12 +328,12 @@ const helpersSlice = (three = window.THREE) => {
 
       if (this._aaBBspace === 'IJK') {
         this._halfDimensions = this._stack.halfDimensionsIJK;
-        this._center = new three.Vector3(
+        this._center = new Vector3(
           this._stack.halfDimensionsIJK.x - 0.5,
           this._stack.halfDimensionsIJK.y - 0.5,
           this._stack.halfDimensionsIJK.z - 0.5
         );
-        this._toAABB = new three.Matrix4();
+        this._toAABB = new Matrix4();
       } else {
         // LPS
         let aaBBox = this._stack.AABBox();
@@ -354,7 +351,7 @@ const helpersSlice = (three = window.THREE) => {
 
       // Convenience vars
       try {
-        const SliceGeometryContructor = geometriesSlice(three);
+        const SliceGeometryContructor = geometriesSlice();
         this._geometry = new SliceGeometryContructor(
           this._halfDimensions,
           this._center,
@@ -396,7 +393,7 @@ const helpersSlice = (three = window.THREE) => {
         }
 
         this._createMaterial({
-          side: three.DoubleSide,
+          side: DoubleSide,
         });
       }
 
@@ -405,7 +402,7 @@ const helpersSlice = (three = window.THREE) => {
       this.updateIntensitySettingsUniforms();
 
       // create the mesh!
-      this._mesh = new three.Mesh(this._geometry, this._material);
+      this._mesh = new Mesh(this._geometry, this._material);
       if (this._aaBBspace === 'IJK') {
         this._mesh.applyMatrix(this._stack.ijk2LPS);
       }
@@ -544,28 +541,28 @@ const helpersSlice = (three = window.THREE) => {
     cartesianEquation() {
       // Make sure we have a geometry
       if (!this._geometry || !this._geometry.vertices || this._geometry.vertices.length < 3) {
-        return new three.Vector4();
+        return new Vector4();
       }
 
       let vertices = this._geometry.vertices;
       let dataToWorld = this._stack.ijk2LPS;
-      let p1 = new three.Vector3(vertices[0].x, vertices[0].y, vertices[0].z).applyMatrix4(
+      let p1 = new Vector3(vertices[0].x, vertices[0].y, vertices[0].z).applyMatrix4(
         dataToWorld
       );
-      let p2 = new three.Vector3(vertices[1].x, vertices[1].y, vertices[1].z).applyMatrix4(
+      let p2 = new Vector3(vertices[1].x, vertices[1].y, vertices[1].z).applyMatrix4(
         dataToWorld
       );
-      let p3 = new three.Vector3(vertices[2].x, vertices[2].y, vertices[2].z).applyMatrix4(
+      let p3 = new Vector3(vertices[2].x, vertices[2].y, vertices[2].z).applyMatrix4(
         dataToWorld
       );
-      let v1 = new three.Vector3();
-      let v2 = new three.Vector3();
+      let v1 = new Vector3();
+      let v2 = new Vector3();
       let normal = v1
         .subVectors(p3, p2)
         .cross(v2.subVectors(p1, p2))
         .normalize();
 
-      return new three.Vector4(normal.x, normal.y, normal.z, -normal.dot(p1));
+      return new Vector4(normal.x, normal.y, normal.z, -normal.dot(p1));
     }
   };
 };

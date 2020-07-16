@@ -41,15 +41,12 @@ import coreUtils from '../core/core.utils';
  *  let slice = new THREE.Mesh(sliceGeometry, sliceMaterial);
  *  scene.add(slice);
  */
+import {ShapeBufferGeometry, Matrix4, Shape, Float32BufferAttribute} from 'three'
+const geometriesSlice = () => {
 
-const geometriesSlice = (three = window.THREE) => {
-  if (three === undefined || three.ShapeBufferGeometry === undefined) {
-    return null;
-  }
-
-  const Constructor = three.ShapeBufferGeometry;
+  const Constructor = ShapeBufferGeometry;
   return class extends Constructor {
-    constructor(halfDimensions, center, position, direction, toAABB = new three.Matrix4()) {
+    constructor(halfDimensions, center, position, direction, toAABB = new Matrix4()) {
       //
       // prepare data for the shape!
       //
@@ -84,7 +81,7 @@ const geometriesSlice = (three = window.THREE) => {
       let points = coreUtils.orderIntersections(intersections, direction);
 
       // create the shape
-      let shape = new three.Shape();
+      let shape = new Shape();
       // move to first point!
       shape.moveTo(points[0].xy.x, points[0].xy.y);
 
@@ -109,7 +106,7 @@ const geometriesSlice = (three = window.THREE) => {
       this.type = 'SliceBufferGeometry';
 
       // update real position of each vertex! (not in 2d)
-      this.addAttribute( 'position', new three.Float32BufferAttribute( positions, 3 ) );
+      this.addAttribute( 'position', new Float32BufferAttribute( positions, 3 ) );
       this.vertices = points; // legacy code to compute normals int he SliceHelper
     }
   };

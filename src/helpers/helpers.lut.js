@@ -3,11 +3,12 @@ import CoreUtils from '../core/core.utils';
 /**
  * @module helpers/lut
  */
-const helpersLut = (three = window.THREE) => {
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-  const Constructor = three.Object3D;
+
+ import {Object3D, Texture, ClampToEdgeWrapping, NearestFilter, UVMapping} from 'three'
+
+const helpersLut = () => {
+
+  const Constructor = Object3D;
   return class extends Constructor {
     constructor(
       domTarget,
@@ -132,10 +133,10 @@ const helpersLut = (three = window.THREE) => {
     }
 
     get texture() {
-      let texture = new three.Texture(this._canvas);
-      texture.mapping = three.UVMapping;
-      texture.wrapS = texture.wrapT = three.ClampToEdgeWrapping;
-      texture.magFilter = texture.minFilter = three.NearestFilter;
+      let texture = new Texture(this._canvas);
+      texture.mapping = UVMapping;
+      texture.wrapS = texture.wrapT = ClampToEdgeWrapping;
+      texture.magFilter = texture.minFilter = NearestFilter;
       texture.premultiplyAlpha = true;
       texture.needsUpdate = true;
       return texture;

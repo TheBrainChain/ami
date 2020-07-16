@@ -4,12 +4,11 @@
  * @module helpers/material/mixin
  */
 
-const helpersMaterialMixin = (three = window.THREE) => {
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
+ import {Object3D, ShaderMaterial, DataTexture,UnsignedByteType, UVMapping, ClampToEdgeWrapping, NearestFilter} from 'three'
 
-  const Constructor = three.Object3D;
+const helpersMaterialMixin = () => {
+
+  const Constructor = Object3D;
   return class extends Constructor {
     _createMaterial(extraOptions) {
       // generate shaders on-demand!
@@ -24,7 +23,7 @@ const helpersMaterialMixin = (three = window.THREE) => {
       };
 
       let options = Object.assign(extraOptions, globalOptions);
-      this._material = new three.ShaderMaterial(options);
+      this._material = new ShaderMaterial(options);
       this._material.needsUpdate = true;
     }
 
@@ -42,17 +41,17 @@ const helpersMaterialMixin = (three = window.THREE) => {
     _prepareTexture() {
       this._textures = [];
       for (let m = 0; m < this._stack._rawData.length; m++) {
-        let tex = new three.DataTexture(
+        let tex = new DataTexture(
           this._stack.rawData[m],
           this._stack.textureSize,
           this._stack.textureSize,
           this._stack.textureType,
-          three.UnsignedByteType,
-          three.UVMapping,
-          three.ClampToEdgeWrapping,
-          three.ClampToEdgeWrapping,
-          three.NearestFilter,
-          three.NearestFilter
+          UnsignedByteType,
+          UVMapping,
+          ClampToEdgeWrapping,
+          ClampToEdgeWrapping,
+          NearestFilter,
+          NearestFilter
         );
         tex.needsUpdate = true;
         tex.flipY = true;

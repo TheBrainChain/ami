@@ -8,13 +8,10 @@ import { helpersMaterialMixin } from '../helpers/helpers.material.mixin';
 /**
  * @module helpers/volumerendering
  */
+import {Matrix4, Mesh, BoxGeometry, BackSide} from 'three'
+const helpersVolumeRendering = () => {
 
-const helpersVolumeRendering = (three = window.THREE) => {
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  const Constructor = helpersMaterialMixin(three);
+  const Constructor = helpersMaterialMixin();
   return class extends Constructor {
     constructor(stack) {
       //
@@ -48,7 +45,7 @@ const helpersVolumeRendering = (three = window.THREE) => {
       this._prepareMaterial();
       this._prepareGeometry();
 
-      this._mesh = new three.Mesh(this._geometry, this._material);
+      this._mesh = new Mesh(this._geometry, this._material);
       this.add(this._mesh);
     }
 
@@ -103,7 +100,7 @@ const helpersVolumeRendering = (three = window.THREE) => {
       this._uniforms.uAlgorithm.value = this._algorithm;
 
       this._createMaterial({
-        side: three.BackSide,
+        side: BackSide,
         transparent: true,
       });
     }
@@ -112,13 +109,13 @@ const helpersVolumeRendering = (three = window.THREE) => {
       let worldBBox = this._stack.worldBoundingBox();
       let centerLPS = this._stack.worldCenter();
 
-      this._geometry = new three.BoxGeometry(
+      this._geometry = new BoxGeometry(
         worldBBox[1] - worldBBox[0],
         worldBBox[3] - worldBBox[2],
         worldBBox[5] - worldBBox[4]
       );
       this._geometry.applyMatrix(
-        new three.Matrix4().makeTranslation(centerLPS.x, centerLPS.y, centerLPS.z)
+        new Matrix4().makeTranslation(centerLPS.x, centerLPS.y, centerLPS.z)
       );
     }
 
