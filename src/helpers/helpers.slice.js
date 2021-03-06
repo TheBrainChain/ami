@@ -404,7 +404,7 @@ const helpersSlice = () => {
       // create the mesh!
       this._mesh = new Mesh(this._geometry, this._material);
       if (this._aaBBspace === 'IJK') {
-        this._mesh.applyMatrix(this._stack.ijk2LPS);
+        this._mesh.applyMatrix4(this._stack.ijk2LPS);
       }
 
       this._mesh.visible = this._visible;

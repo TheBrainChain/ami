@@ -54,9 +54,9 @@ const helpersBoundingBox = () => {
       const offset = new Vector3(-0.5, -0.5, -0.5);
 
       // Geometry
-      const geometry = new BoxGeometry(dimensions.x, dimensions.y, dimensions.z);
-      geometry.applyMatrix(
-        new Matrix4().makeTranslation(
+      const geometry = new three.BoxGeometry(dimensions.x, dimensions.y, dimensions.z);
+      geometry.applyMatrix4(
+        new three.Matrix4().makeTranslation(
           halfDimensions.x + offset.x,
           halfDimensions.y + offset.y,
           halfDimensions.z + offset.z
@@ -69,8 +69,8 @@ const helpersBoundingBox = () => {
         wireframe: true,
       });
 
-      const mesh = new Mesh(this._geometry, null);
-      mesh.applyMatrix(this._stack.ijk2LPS);
+      const mesh = new three.Mesh(this._geometry, null);
+      mesh.applyMatrix4(this._stack.ijk2LPS);
       mesh.visible = this._visible;
       this._meshStack = mesh;
 

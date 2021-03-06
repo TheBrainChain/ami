@@ -72,11 +72,11 @@ const helpersBorder = () => {
       const positions = new Float32Array((nbOfVertices + 1) * 3);
       positions.set(this._helpersSlice.geometry.attributes.position.array, 0);
       positions.set(this._helpersSlice.geometry.vertices[0].toArray(), nbOfVertices * 3);
-      this._geometry.addAttribute( 'position', new Float32BufferAttribute( positions, 3 ) );
+      this._geometry.setAttribute( 'position', new three.Float32BufferAttribute( positions, 3 ) );
 
       this._mesh = new Line(this._geometry, this._material);
       if (this._helpersSlice.aabbSpace === 'IJK') {
-        this._mesh.applyMatrix(this._helpersSlice.stack.ijk2LPS);
+        this._mesh.applyMatrix4(this._helpersSlice.stack.ijk2LPS);
       }
       this._mesh.visible = this._visible;
 
