@@ -6,10 +6,7 @@ import CoreUtils from '../core/core.utils';
 import ModelsSeries from '../models/models.series';
 import ModelsStack from '../models/models.stack';
 import ModelsFrame from '../models/models.frame';
-import ParsersMhd from '../parsers/parsers.mhd';
 import ParsersNifti from '../parsers/parsers.nifti';
-import ParsersNrrd from '../parsers/parsers.nrrd';
-import ParsersMgh from '../parsers/parsers.mgh';
 
 /**
  *

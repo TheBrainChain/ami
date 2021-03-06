@@ -28,30 +28,33 @@ const config = {
   module: {
     rules: [
       {
-        test: /\.js$/,
-        loader: 'babel-loader',
-        include: [path.resolve(__dirname, 'src')],
-        exclude: [/node_modules/, /external/],
-      },
-      {
         test: /\.ts$/,
         loader: 'ts-loader',
         include: [path.resolve(__dirname, 'src')],
         exclude: [/external/],
       },
+      {
+        test: /\.js$/,
+        loader: 'babel-loader',
+        include: [path.resolve(__dirname, 'src')],
+        options: {
+          presets: [
+            "@babel/preset-env"]
+        }, exclude: [/node_modules/, /external/],
+      },
     ],
   },
-  node: {
-    fs: 'empty',
-  },
+  // node: {
+  //   fs: 'empty',
+  // },
   plugins: [],
   optimization: {
-    minimizer: [
-      new UglifyJsPlugin({
-        parallel: true,
-      }),
-    ],
-    concatenateModules: false,
+    // minimizer: [
+    //   new UglifyJsPlugin({
+    //     parallel: true,
+    //   }),
+    // ],
+    // concatenateModules: false,
   },
 };
 
