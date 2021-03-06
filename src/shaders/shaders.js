@@ -6,9 +6,9 @@ import DataUniform from './shaders.data.uniform';
 import DataFragment from './shaders.data.fragment';
 import DataVertex from './shaders.data.vertex';
 
-import VRUniform from './shaders.vr.uniform';
-import VRFragment from './shaders.vr.fragment';
-import VRVertex from './shaders.vr.vertex';
+// import VRUniform from './shaders.vr.uniform';
+// import VRFragment from './shaders.vr.fragment';
+// import VRVertex from './shaders.vr.vertex';
 
 import LayerUniform from './shaders.layer.uniform';
 import LayerFragment from './shaders.layer.fragment';
@@ -25,9 +25,9 @@ export {
   DataUniform as DataUniformShader,
   DataFragment as DataFragmentShader,
   DataVertex as DataVertexShader,
-  VRUniform as VRUniformShader,
-  VRFragment as VRFragmentShader,
-  VRVertex as VRVertexShader,
+  // VRUniform as VRUniformShader,
+  // VRFragment as VRFragmentShader,
+  // VRVertex as VRVertexShader,
   LayerUniform as LayerUniformShader,
   LayerFragment as LayerFragmentShader,
   LayerVertex as LayerVertexShader,

@@ -6,7 +6,7 @@ export * from './helpers/helpers';
 export * from './loaders/loaders';
 export * from './models/models';
 export * from './parsers/parsers';
-export * from './presets/presets';
+// export * from './presets/presets';
 export * from './shaders/shaders';
 // export * from './widgets/widgets';
 

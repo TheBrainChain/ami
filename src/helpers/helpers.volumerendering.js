@@ -1,7 +1,7 @@
-/** * Imports ***/
-import ShadersUniform from '../shaders/shaders.vr.uniform';
-import ShadersVertex from '../shaders/shaders.vr.vertex';
-import ShadersFragment from '../shaders/shaders.vr.fragment';
+// /** * Imports ***/
+// import ShadersUniform from '../shaders/shaders.vr.uniform';
+// import ShadersVertex from '../shaders/shaders.vr.vertex';
+// import ShadersFragment from '../shaders/shaders.vr.fragment';
 
 import { helpersMaterialMixin } from '../helpers/helpers.material.mixin';
 
