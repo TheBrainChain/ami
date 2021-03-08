@@ -2,13 +2,10 @@
  *
  * @module geometries/voxel
  */
+import {BoxGeometry, Matrix4} from "three"
+const geometriesVoxel = () => {
 
-const geometriesVoxel = (three = window.THREE) => {
-  if (three === undefined || three.BoxGeometry === undefined) {
-    return null;
-  }
-
-  const Constructor = three.BoxGeometry;
+  const Constructor = BoxGeometry;
   return class extends Constructor {
     constructor(dataPosition) {
       super(1, 1, 1);
@@ -16,7 +13,7 @@ const geometriesVoxel = (three = window.THREE) => {
       this._location = dataPosition;
 
       this.applyMatrix(
-        new three.Matrix4().makeTranslation(this._location.x, this._location.y, this._location.z)
+        new Matrix4().makeTranslation(this._location.x, this._location.y, this._location.z)
       );
 
       this.verticesNeedUpdate = true;
@@ -47,7 +44,7 @@ const geometriesVoxel = (three = window.THREE) => {
       this.vertices[7].set(-0.5, -0.5, +0.5);
 
       this.applyMatrix(
-        new three.Matrix4().makeTranslation(this._location.x, this._location.y, this._location.z)
+        new Matrix4().makeTranslation(this._location.x, this._location.y, this._location.z)
       );
 
       this.verticesNeedUpdate = true;

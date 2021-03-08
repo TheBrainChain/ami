@@ -4,7 +4,7 @@ let defaultSegmentation = {
   0: { color: [0, 0, 0], opacity: 0, label: 'background' },
   1: { color: [255, 0, 0], opacity: 1, label: 'white matter' },
 };
-
+import {Texture, UVMapping, ClampToEdgeWrapping, NearestFilter} from 'three'
 export default class HelpersSegmentationLut {
   constructor(domTarget, segmentation = defaultSegmentation) {
     if (CoreUtils.isString(domTarget)) {
@@ -77,10 +77,10 @@ export default class HelpersSegmentationLut {
   }
 
   get texture() {
-    let texture = new THREE.Texture(this._canvas);
-    texture.mapping = THREE.UVMapping;
-    texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
-    texture.magFilter = texture.minFilter = THREE.NearestFilter;
+    let texture = new Texture(this._canvas);
+    texture.mapping = UVMapping;
+    texture.wrapS = texture.wrapT = ClampToEdgeWrapping;
+    texture.magFilter = texture.minFilter = NearestFilter;
     texture.premultiplyAlpha = true;
     texture.needsUpdate = true;
 

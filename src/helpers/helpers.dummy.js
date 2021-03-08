@@ -1,7 +1,8 @@
 /**
  * @module helpers/dummy
  */
-export default class HelpersDummy extends THREE.Object3D {
+import {Object3D, MeshBasicMaterial, Mesh, SphereGeometry, MeshBasicMaterial} from 'three'
+export default class HelpersDummy extends Object3D {
   constructor() {
     //
     super();
@@ -17,9 +18,9 @@ export default class HelpersDummy extends THREE.Object3D {
 
   // private methods
   _create() {
-    let geometry = new THREE.SphereGeometry(5, 32, 32);
-    let material = new THREE.MeshBasicMaterial({ color: 0xffff00 });
-    this._mesh = new THREE.Mesh(geometry, material);
+    let geometry = new SphereGeometry(5, 32, 32);
+    let material = new MeshBasicMaterial({ color: 0xffff00 });
+    this._mesh = new Mesh(geometry, material);
 
     // and add it!
     this.add(this._mesh);

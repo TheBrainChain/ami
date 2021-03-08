@@ -72,7 +72,7 @@ const helpersBorder = () => {
       const positions = new Float32Array((nbOfVertices + 1) * 3);
       positions.set(this._helpersSlice.geometry.attributes.position.array, 0);
       positions.set(this._helpersSlice.geometry.vertices[0].toArray(), nbOfVertices * 3);
-      this._geometry.setAttribute( 'position', new three.Float32BufferAttribute( positions, 3 ) );
+      this._geometry.setAttribute( 'position', new Float32BufferAttribute( positions, 3 ) );
 
       this._mesh = new Line(this._geometry, this._material);
       if (this._helpersSlice.aabbSpace === 'IJK') {

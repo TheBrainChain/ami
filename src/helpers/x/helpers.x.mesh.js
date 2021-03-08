@@ -1,4 +1,4 @@
-import { Matrix4 } from 'three/src/math/Matrix4';
+import { Matrix4, MeshLambertMaterial, DoubleSide, SmoothShading, VTKLoader, Mesh } from 'three';
 
 /**
  * @module helpers/x/mesh
@@ -8,14 +8,14 @@ export default class {
   constructor() {
     this._file = null;
 
-    this._3jsVTK_loader = new THREE.VTKLoader();
+    this._3jsVTK_loader = new VTKLoader();
     this._mesh = null;
     this._materialColor = 0xe91e63;
     this._RAStoLPS = null;
-    this._material = new THREE.MeshLambertMaterial({
-      shading: THREE.SmoothShading,
+    this._material = new MeshLambertMaterial({
+      shading: SmoothShading,
       color: this._materialColor,
-      side: THREE.DoubleSide,
+      side: DoubleSide,
     });
   }
 
@@ -44,7 +44,7 @@ export default class {
           this.file,
           geometry => {
             geometry.computeVertexNormals();
-            this._mesh = new THREE.Mesh(geometry, this._material);
+            this._mesh = new Mesh(geometry, this._material);
             this._RAStoLPS = new Matrix4();
             this._RAStoLPS.set(-1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
             this._mesh.applyMatrix4(this._RAStoLPS);

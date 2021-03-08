@@ -830,6 +830,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   "orbit": () => (/* binding */ orbit),
 /* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
+/* harmony import */ var three__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! three */ "./node_modules/three/build/three.module.js");
 /**
  * @author qiao / https://github.com/qiao
  * @author mrdoob / http://mrdoob.com
@@ -844,13 +845,9 @@ __webpack_require__.r(__webpack_exports__);
 //    Zoom - middle mouse, or mousewheel / touch: two-finger spread or squish
 //    Pan - right mouse, or left mouse + ctrl/meta/shiftKey, or arrow keys / touch: two-finger move
 // adapted from https://github.com/mrdoob/three.js/blob/dev/examples/jsm/controls/OrbitControls.js
+
+
 var orbit = function orbit() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.EventDispatcher === undefined) {
-    return null;
-  }
-
   var OrbitControls = function OrbitControls(object, domElement) {
     this.object = object;
     this.domElement = domElement !== undefined ? domElement : document; // Set to false to disable this control
@@ -859,7 +856,7 @@ var orbit = function orbit() {
 
     this.preventDefault = true; // "target" sets the location of focus, where the object orbits around
 
-    this.target = new three.Vector3(); // How far you can dolly in and out ( PerspectiveCamera only )
+    this.target = new three__WEBPACK_IMPORTED_MODULE_0__.Vector3(); // How far you can dolly in and out ( PerspectiveCamera only )
 
     this.minDistance = 0;
     this.maxDistance = Infinity; // How far you can zoom in and out ( OrthographicCamera only )
@@ -912,9 +909,9 @@ var orbit = function orbit() {
     }; // Mouse buttons
 
     this.mouseButtons = {
-      LEFT: three.MOUSE.LEFT,
-      MIDDLE: three.MOUSE.MIDDLE,
-      RIGHT: three.MOUSE.RIGHT
+      LEFT: three__WEBPACK_IMPORTED_MODULE_0__.MOUSE.LEFT,
+      MIDDLE: three__WEBPACK_IMPORTED_MODULE_0__.MOUSE.MIDDLE,
+      RIGHT: three__WEBPACK_IMPORTED_MODULE_0__.MOUSE.RIGHT
     }; // for reset
 
     this.target0 = this.target.clone();
@@ -952,12 +949,12 @@ var orbit = function orbit() {
 
 
     this.update = function () {
-      var offset = new three.Vector3(); // so camera.up is the orbit axis
+      var offset = new three__WEBPACK_IMPORTED_MODULE_0__.Vector3(); // so camera.up is the orbit axis
 
-      var quat = new three.Quaternion().setFromUnitVectors(object.up, new three.Vector3(0, 1, 0));
+      var quat = new three__WEBPACK_IMPORTED_MODULE_0__.Quaternion().setFromUnitVectors(object.up, new three__WEBPACK_IMPORTED_MODULE_0__.Vector3(0, 1, 0));
       var quatInverse = quat.clone().inverse();
-      var lastPosition = new three.Vector3();
-      var lastQuaternion = new three.Quaternion();
+      var lastPosition = new three__WEBPACK_IMPORTED_MODULE_0__.Vector3();
+      var lastQuaternion = new three__WEBPACK_IMPORTED_MODULE_0__.Quaternion();
       return function update() {
         var position = scope.object.position;
         offset.copy(position).sub(scope.target); // rotate offset to "y-axis-is-up" space
@@ -1049,20 +1046,20 @@ var orbit = function orbit() {
     var state = STATE.NONE;
     var EPS = 0.000001; // current position in spherical coordinates
 
-    var spherical = new three.Spherical();
-    var sphericalDelta = new three.Spherical();
+    var spherical = new three__WEBPACK_IMPORTED_MODULE_0__.Spherical();
+    var sphericalDelta = new three__WEBPACK_IMPORTED_MODULE_0__.Spherical();
     var scale = 1;
-    var panOffset = new three.Vector3();
+    var panOffset = new three__WEBPACK_IMPORTED_MODULE_0__.Vector3();
     var zoomChanged = false;
-    var rotateStart = new three.Vector2();
-    var rotateEnd = new three.Vector2();
-    var rotateDelta = new three.Vector2();
-    var panStart = new three.Vector2();
-    var panEnd = new three.Vector2();
-    var panDelta = new three.Vector2();
-    var dollyStart = new three.Vector2();
-    var dollyEnd = new three.Vector2();
-    var dollyDelta = new three.Vector2();
+    var rotateStart = new three__WEBPACK_IMPORTED_MODULE_0__.Vector2();
+    var rotateEnd = new three__WEBPACK_IMPORTED_MODULE_0__.Vector2();
+    var rotateDelta = new three__WEBPACK_IMPORTED_MODULE_0__.Vector2();
+    var panStart = new three__WEBPACK_IMPORTED_MODULE_0__.Vector2();
+    var panEnd = new three__WEBPACK_IMPORTED_MODULE_0__.Vector2();
+    var panDelta = new three__WEBPACK_IMPORTED_MODULE_0__.Vector2();
+    var dollyStart = new three__WEBPACK_IMPORTED_MODULE_0__.Vector2();
+    var dollyEnd = new three__WEBPACK_IMPORTED_MODULE_0__.Vector2();
+    var dollyDelta = new three__WEBPACK_IMPORTED_MODULE_0__.Vector2();
 
     function getAutoRotationAngle() {
       return 2 * Math.PI / 60 / 60 * scope.autoRotateSpeed;
@@ -1081,7 +1078,7 @@ var orbit = function orbit() {
     }
 
     var panLeft = function () {
-      var v = new three.Vector3();
+      var v = new three__WEBPACK_IMPORTED_MODULE_0__.Vector3();
       return function panLeft(distance, objectMatrix) {
         v.setFromMatrixColumn(objectMatrix, 0); // get X column of objectMatrix
 
@@ -1091,7 +1088,7 @@ var orbit = function orbit() {
     }();
 
     var panUp = function () {
-      var v = new three.Vector3();
+      var v = new three__WEBPACK_IMPORTED_MODULE_0__.Vector3();
       return function panUp(distance, objectMatrix) {
         if (scope.screenSpacePanning === true) {
           v.setFromMatrixColumn(objectMatrix, 1);
@@ -1107,7 +1104,7 @@ var orbit = function orbit() {
 
 
     var pan = function () {
-      var offset = new three.Vector3();
+      var offset = new three__WEBPACK_IMPORTED_MODULE_0__.Vector3();
       return function pan(deltaX, deltaY) {
         var element = scope.domElement === document ? scope.domElement.body : scope.domElement;
 
@@ -1484,73 +1481,73 @@ var orbit = function orbit() {
     this.update();
   };
 
-  OrbitControls.prototype = Object.create(three.EventDispatcher.prototype);
+  OrbitControls.prototype = Object.create(three__WEBPACK_IMPORTED_MODULE_0__.EventDispatcher.prototype);
   OrbitControls.prototype.constructor = OrbitControls;
   Object.defineProperties(OrbitControls.prototype, {
     center: {
       get: function get() {
-        console.warn('THREE.OrbitControls: .center has been renamed to .target');
+        console.warn('OrbitControls: .center has been renamed to .target');
         return this.target;
       }
     },
     // backward compatibility
     noZoom: {
       get: function get() {
-        console.warn('THREE.OrbitControls: .noZoom has been deprecated. Use .enableZoom instead.');
+        console.warn('OrbitControls: .noZoom has been deprecated. Use .enableZoom instead.');
         return !this.enableZoom;
       },
       set: function set(value) {
-        console.warn('THREE.OrbitControls: .noZoom has been deprecated. Use .enableZoom instead.');
+        console.warn('OrbitControls: .noZoom has been deprecated. Use .enableZoom instead.');
         this.enableZoom = !value;
       }
     },
     noRotate: {
       get: function get() {
-        console.warn('THREE.OrbitControls: .noRotate has been deprecated. Use .enableRotate instead.');
+        console.warn('OrbitControls: .noRotate has been deprecated. Use .enableRotate instead.');
         return !this.enableRotate;
       },
       set: function set(value) {
-        console.warn('THREE.OrbitControls: .noRotate has been deprecated. Use .enableRotate instead.');
+        console.warn('OrbitControls: .noRotate has been deprecated. Use .enableRotate instead.');
         this.enableRotate = !value;
       }
     },
     noPan: {
       get: function get() {
-        console.warn('THREE.OrbitControls: .noPan has been deprecated. Use .enablePan instead.');
+        console.warn('OrbitControls: .noPan has been deprecated. Use .enablePan instead.');
         return !this.enablePan;
       },
       set: function set(value) {
-        console.warn('THREE.OrbitControls: .noPan has been deprecated. Use .enablePan instead.');
+        console.warn('OrbitControls: .noPan has been deprecated. Use .enablePan instead.');
         this.enablePan = !value;
       }
     },
     noKeys: {
       get: function get() {
-        console.warn('THREE.OrbitControls: .noKeys has been deprecated. Use .enableKeys instead.');
+        console.warn('OrbitControls: .noKeys has been deprecated. Use .enableKeys instead.');
         return !this.enableKeys;
       },
       set: function set(value) {
-        console.warn('THREE.OrbitControls: .noKeys has been deprecated. Use .enableKeys instead.');
+        console.warn('OrbitControls: .noKeys has been deprecated. Use .enableKeys instead.');
         this.enableKeys = !value;
       }
     },
     staticMoving: {
       get: function get() {
-        console.warn('THREE.OrbitControls: .staticMoving has been deprecated. Use .enableDamping instead.');
+        console.warn('OrbitControls: .staticMoving has been deprecated. Use .enableDamping instead.');
         return !this.enableDamping;
       },
       set: function set(value) {
-        console.warn('THREE.OrbitControls: .staticMoving has been deprecated. Use .enableDamping instead.');
+        console.warn('OrbitControls: .staticMoving has been deprecated. Use .enableDamping instead.');
         this.enableDamping = !value;
       }
     },
     dynamicDampingFactor: {
       get: function get() {
-        console.warn('THREE.OrbitControls: .dynamicDampingFactor has been renamed. Use .dampingFactor instead.');
+        console.warn('OrbitControls: .dynamicDampingFactor has been renamed. Use .dampingFactor instead.');
         return this.dampingFactor;
       },
       set: function set(value) {
-        console.warn('THREE.OrbitControls: .dynamicDampingFactor has been renamed. Use .dampingFactor instead.');
+        console.warn('OrbitControls: .dynamicDampingFactor has been renamed. Use .dampingFactor instead.');
         this.dampingFactor = value;
       }
     }
@@ -2935,7 +2932,7 @@ var Intersections = /*#__PURE__*/function () {
 
 
       var fromAABB = new three_src_math_Matrix4__WEBPACK_IMPORTED_MODULE_0__.Matrix4();
-      fromAABB.getInverse(aabb.toAABB);
+      fromAABB.invert(aabb.toAABB);
       var t1 = plane.direction.clone().applyMatrix4(aabb.toAABB);
       var t0 = new three_src_math_Vector3__WEBPACK_IMPORTED_MODULE_1__.Vector3(0, 0, 0).applyMatrix4(aabb.toAABB);
       var planeAABB = this.posdir(plane.position.clone().applyMatrix4(aabb.toAABB), new three_src_math_Vector3__WEBPACK_IMPORTED_MODULE_1__.Vector3(t1.x - t0.x, t1.y - t0.y, t1.z - t0.z).normalize());
@@ -4043,7 +4040,7 @@ var geometriesSlice = function geometriesSlice() {
       _this = _super.call(this, shape);
       _this.type = 'SliceBufferGeometry'; // update real position of each vertex! (not in 2d)
 
-      _this.setAttribute('position', new three.Float32BufferAttribute(positions, 3));
+      _this.setAttribute('position', new three__WEBPACK_IMPORTED_MODULE_0__.Float32BufferAttribute(positions, 3));
 
       _this.vertices = points; // legacy code to compute normals int he SliceHelper
 
@@ -4072,6 +4069,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   "geometriesVoxel": () => (/* binding */ geometriesVoxel),
 /* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
+/* harmony import */ var three__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! three */ "./node_modules/three/build/three.module.js");
 function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -4098,14 +4096,10 @@ function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.g
  *
  * @module geometries/voxel
  */
+
+
 var geometriesVoxel = function geometriesVoxel() {
-  var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.BoxGeometry === undefined) {
-    return null;
-  }
-
-  var Constructor = three.BoxGeometry;
+  var Constructor = three__WEBPACK_IMPORTED_MODULE_0__.BoxGeometry;
   return /*#__PURE__*/function (_Constructor) {
     _inherits(_class, _Constructor);
 
@@ -4119,7 +4113,7 @@ var geometriesVoxel = function geometriesVoxel() {
       _this = _super.call(this, 1, 1, 1);
       _this._location = dataPosition;
 
-      _this.applyMatrix(new three.Matrix4().makeTranslation(_this._location.x, _this._location.y, _this._location.z));
+      _this.applyMatrix(new three__WEBPACK_IMPORTED_MODULE_0__.Matrix4().makeTranslation(_this._location.x, _this._location.y, _this._location.z));
 
       _this.verticesNeedUpdate = true;
       return _this;
@@ -4153,7 +4147,7 @@ var geometriesVoxel = function geometriesVoxel() {
         this.vertices[5].set(-0.5, +0.5, +0.5);
         this.vertices[6].set(-0.5, -0.5, -0.5);
         this.vertices[7].set(-0.5, -0.5, +0.5);
-        this.applyMatrix(new three.Matrix4().makeTranslation(this._location.x, this._location.y, this._location.z));
+        this.applyMatrix(new three__WEBPACK_IMPORTED_MODULE_0__.Matrix4().makeTranslation(this._location.x, this._location.y, this._location.z));
         this.verticesNeedUpdate = true;
       }
     }]);
@@ -4289,7 +4283,7 @@ var helpersBorder = function helpersBorder() {
         positions.set(this._helpersSlice.geometry.attributes.position.array, 0);
         positions.set(this._helpersSlice.geometry.vertices[0].toArray(), nbOfVertices * 3);
 
-        this._geometry.setAttribute('position', new three.Float32BufferAttribute(positions, 3));
+        this._geometry.setAttribute('position', new three__WEBPACK_IMPORTED_MODULE_0__.Float32BufferAttribute(positions, 3));
 
         this._mesh = new three__WEBPACK_IMPORTED_MODULE_0__.Line(this._geometry, this._material);
 
@@ -4516,9 +4510,10 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   "helpersContour": () => (/* binding */ helpersContour),
 /* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
-/* harmony import */ var _shaders_shaders_contour_uniform__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../shaders/shaders.contour.uniform */ "./src/shaders/shaders.contour.uniform.js");
-/* harmony import */ var _shaders_shaders_contour_vertex__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../shaders/shaders.contour.vertex */ "./src/shaders/shaders.contour.vertex.js");
-/* harmony import */ var _shaders_shaders_contour_fragment__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../shaders/shaders.contour.fragment */ "./src/shaders/shaders.contour.fragment.js");
+/* harmony import */ var _shaders_shaders_contour_uniform__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../shaders/shaders.contour.uniform */ "./src/shaders/shaders.contour.uniform.js");
+/* harmony import */ var _shaders_shaders_contour_vertex__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../shaders/shaders.contour.vertex */ "./src/shaders/shaders.contour.vertex.js");
+/* harmony import */ var _shaders_shaders_contour_fragment__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../shaders/shaders.contour.fragment */ "./src/shaders/shaders.contour.fragment.js");
+/* harmony import */ var three__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! three */ "./node_modules/three/build/three.module.js");
 function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -4549,14 +4544,11 @@ function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.g
  * @module helpers/contour
  */
 
+
+
 var helpersContour = function helpersContour() {
   var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = three.Object3D;
+  var Constructor = three__WEBPACK_IMPORTED_MODULE_0__.Object3D;
   return /*#__PURE__*/function (_Constructor) {
     _inherits(_class, _Constructor);
 
@@ -4575,9 +4567,9 @@ var helpersContour = function helpersContour() {
       _this._contourOpacity = 1;
       _this._canvasWidth = 0;
       _this._canvasHeight = 0;
-      _this._shadersFragment = _shaders_shaders_contour_fragment__WEBPACK_IMPORTED_MODULE_0__.default;
-      _this._shadersVertex = _shaders_shaders_contour_vertex__WEBPACK_IMPORTED_MODULE_1__.default;
-      _this._uniforms = _shaders_shaders_contour_uniform__WEBPACK_IMPORTED_MODULE_2__.default.uniforms();
+      _this._shadersFragment = _shaders_shaders_contour_fragment__WEBPACK_IMPORTED_MODULE_1__.default;
+      _this._shadersVertex = _shaders_shaders_contour_vertex__WEBPACK_IMPORTED_MODULE_2__.default;
+      _this._uniforms = _shaders_shaders_contour_uniform__WEBPACK_IMPORTED_MODULE_3__.default.uniforms();
       _this._material = null;
       _this._geometry = geometry;
 
@@ -4591,7 +4583,7 @@ var helpersContour = function helpersContour() {
       value: function _create() {
         this._prepareMaterial();
 
-        this._mesh = new three.Mesh(this._geometry, this._material);
+        this._mesh = new three__WEBPACK_IMPORTED_MODULE_0__.Mesh(this._geometry, this._material);
 
         this._mesh.applyMatrix4(this._stack._ijk2LPS);
 
@@ -4608,10 +4600,10 @@ var helpersContour = function helpersContour() {
           this._uniforms.uCanvasWidth.value = this._canvasWidth;
           this._uniforms.uCanvasHeight.value = this._canvasHeight; // generate material
 
-          var fs = new _shaders_shaders_contour_fragment__WEBPACK_IMPORTED_MODULE_0__.default(this._uniforms);
-          var vs = new _shaders_shaders_contour_vertex__WEBPACK_IMPORTED_MODULE_1__.default();
-          this._material = new three.ShaderMaterial({
-            side: three.DoubleSide,
+          var fs = new _shaders_shaders_contour_fragment__WEBPACK_IMPORTED_MODULE_1__.default(this._uniforms);
+          var vs = new _shaders_shaders_contour_vertex__WEBPACK_IMPORTED_MODULE_2__.default();
+          this._material = new three__WEBPACK_IMPORTED_MODULE_0__.ShaderMaterial({
+            side: three__WEBPACK_IMPORTED_MODULE_0__.DoubleSide,
             uniforms: this._uniforms,
             vertexShader: vs.compute(),
             fragmentShader: fs.compute(),
@@ -4817,9 +4809,10 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   "helpersLocalizer": () => (/* binding */ helpersLocalizer),
 /* harmony export */   "default": () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
-/* harmony import */ var _shaders_shaders_localizer_uniform__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../shaders/shaders.localizer.uniform */ "./src/shaders/shaders.localizer.uniform.js");
-/* harmony import */ var _shaders_shaders_localizer_vertex__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../shaders/shaders.localizer.vertex */ "./src/shaders/shaders.localizer.vertex.js");
-/* harmony import */ var _shaders_shaders_localizer_fragment__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../shaders/shaders.localizer.fragment */ "./src/shaders/shaders.localizer.fragment.js");
+/* harmony import */ var _shaders_shaders_localizer_uniform__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ../shaders/shaders.localizer.uniform */ "./src/shaders/shaders.localizer.uniform.js");
+/* harmony import */ var _shaders_shaders_localizer_vertex__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! ../shaders/shaders.localizer.vertex */ "./src/shaders/shaders.localizer.vertex.js");
+/* harmony import */ var _shaders_shaders_localizer_fragment__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! ../shaders/shaders.localizer.fragment */ "./src/shaders/shaders.localizer.fragment.js");
+/* harmony import */ var three__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! three */ "./node_modules/three/build/three.module.js");
 function _typeof(obj) { "@babel/helpers - typeof"; if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof = function _typeof(obj) { return typeof obj; }; } else { _typeof = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof(obj); }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -4850,14 +4843,11 @@ function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.g
  * @module helpers/localizer
  */
 
+
+
 var helpersLocalizer = function helpersLocalizer() {
   var three = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : window.THREE;
-
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
-
-  var Constructor = three.Object3D;
+  var Constructor = three__WEBPACK_IMPORTED_MODULE_0__.Object3D;
   return /*#__PURE__*/function (_Constructor) {
     _inherits(_class, _Constructor);
 
@@ -4880,9 +4870,9 @@ var helpersLocalizer = function helpersLocalizer() {
       _this._color3 = null;
       _this._canvasWidth = 0;
       _this._canvasHeight = 0;
-      _this._shadersFragment = _shaders_shaders_localizer_fragment__WEBPACK_IMPORTED_MODULE_0__.default;
-      _this._shadersVertex = _shaders_shaders_localizer_vertex__WEBPACK_IMPORTED_MODULE_1__.default;
-      _this._uniforms = _shaders_shaders_localizer_uniform__WEBPACK_IMPORTED_MODULE_2__.default.uniforms();
+      _this._shadersFragment = _shaders_shaders_localizer_fragment__WEBPACK_IMPORTED_MODULE_1__.default;
+      _this._shadersVertex = _shaders_shaders_localizer_vertex__WEBPACK_IMPORTED_MODULE_2__.default;
+      _this._uniforms = _shaders_shaders_localizer_uniform__WEBPACK_IMPORTED_MODULE_3__.default.uniforms();
       _this._material = null;
       _this._geometry = geometry;
 
@@ -4896,7 +4886,7 @@ var helpersLocalizer = function helpersLocalizer() {
       value: function _create() {
         this._prepareMaterial();
 
-        this._mesh = new three.Mesh(this._geometry, this._material);
+        this._mesh = new three__WEBPACK_IMPORTED_MODULE_0__.Mesh(this._geometry, this._material);
 
         this._mesh.applyMatrix(this._stack._ijk2LPS);
 
@@ -4928,10 +4918,10 @@ var helpersLocalizer = function helpersLocalizer() {
           this._uniforms.uCanvasWidth.value = this._canvasWidth;
           this._uniforms.uCanvasHeight.value = this._canvasHeight; // generate material
 
-          var fs = new _shaders_shaders_localizer_fragment__WEBPACK_IMPORTED_MODULE_0__.default(this._uniforms);
-          var vs = new _shaders_shaders_localizer_vertex__WEBPACK_IMPORTED_MODULE_1__.default();
-          this._material = new three.ShaderMaterial({
-            side: three.DoubleSide,
+          var fs = new _shaders_shaders_localizer_fragment__WEBPACK_IMPORTED_MODULE_1__.default(this._uniforms);
+          var vs = new _shaders_shaders_localizer_vertex__WEBPACK_IMPORTED_MODULE_2__.default();
+          this._material = new three__WEBPACK_IMPORTED_MODULE_0__.ShaderMaterial({
+            side: three__WEBPACK_IMPORTED_MODULE_0__.DoubleSide,
             uniforms: this._uniforms,
             vertexShader: vs.compute(),
             fragmentShader: fs.compute()
@@ -5855,6 +5845,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   "default": () => (/* binding */ HelpersSegmentationLut)
 /* harmony export */ });
 /* harmony import */ var _core_core_utils__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! ../core/core.utils */ "./src/core/core.utils.js");
+/* harmony import */ var three__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! three */ "./node_modules/three/build/three.module.js");
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 function _defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } }
@@ -5874,6 +5865,7 @@ var defaultSegmentation = {
     label: 'white matter'
   }
 };
+
 
 var HelpersSegmentationLut = /*#__PURE__*/function () {
   function HelpersSegmentationLut(domTarget) {
@@ -5955,10 +5947,10 @@ var HelpersSegmentationLut = /*#__PURE__*/function () {
   }, {
     key: "texture",
     get: function get() {
-      var texture = new THREE.Texture(this._canvas);
-      texture.mapping = THREE.UVMapping;
-      texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
-      texture.magFilter = texture.minFilter = THREE.NearestFilter;
+      var texture = new three__WEBPACK_IMPORTED_MODULE_1__.Texture(this._canvas);
+      texture.mapping = three__WEBPACK_IMPORTED_MODULE_1__.UVMapping;
+      texture.wrapS = texture.wrapT = three__WEBPACK_IMPORTED_MODULE_1__.ClampToEdgeWrapping;
+      texture.magFilter = texture.minFilter = three__WEBPACK_IMPORTED_MODULE_1__.NearestFilter;
       texture.premultiplyAlpha = true;
       texture.needsUpdate = true;
       return texture;
@@ -6665,7 +6657,7 @@ function _getPrototypeOf(o) { _getPrototypeOf = Object.setPrototypeOf ? Object.g
  * stackHelper.bbox.color = 0xF9F9F9;
  * stackHelper.border.color = 0xF9F9F9;
  *
- * let scene = new THREE.Scene();
+ * let scene = new Scene();
  * scene.add(stackHelper);
  *
  * @see module:helpers/border
@@ -7360,7 +7352,7 @@ var helpersVolumeRendering = function helpersVolumeRendering() {
 
         this._geometry = new three__WEBPACK_IMPORTED_MODULE_1__.BoxGeometry(worldBBox[1] - worldBBox[0], worldBBox[3] - worldBBox[2], worldBBox[5] - worldBBox[4]);
 
-        this._geometry.applyMatrix4(new three.Matrix4().makeTranslation(centerLPS.x, centerLPS.y, centerLPS.z));
+        this._geometry.applyMatrix4(new three__WEBPACK_IMPORTED_MODULE_1__.Matrix4().makeTranslation(centerLPS.x, centerLPS.y, centerLPS.z));
       }
     }, {
       key: "uniforms",

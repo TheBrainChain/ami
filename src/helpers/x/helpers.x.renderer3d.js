@@ -2,7 +2,7 @@
  * @module helpers/x/renderer3d
  */
 import ControlsTrackball from '../../controls/controls.trackball';
-
+import {DirectionalLight, AmbientLight, Scene, PerspectiveCamera, WebGL1Renderer} from 'three'
 export default class {
   constructor(containerId = 'r3d') {
     this._container = null;
@@ -72,7 +72,7 @@ export default class {
   _initRenderer(containerId) {
     // renderer
     this._container = document.getElementById(containerId);
-    this._renderer = new THREE.WebGLRenderer({
+    this._renderer = new WebGLRenderer({
       antialias: true,
     });
     this._renderer.setSize(this._container.clientWidth, this._container.clientHeight);
@@ -82,7 +82,7 @@ export default class {
   }
 
   _initCamera() {
-    this._camera = new THREE.PerspectiveCamera(
+    this._camera = new PerspectiveCamera(
       45,
       this._container.clientWidth / this._container.clientHeight,
       1,
@@ -95,18 +95,18 @@ export default class {
 
   _initScene() {
     // add some lights to the scene by default
-    this._scene = new THREE.Scene();
+    this._scene = new Scene();
 
     // ambient
-    this._scene.add(new THREE.AmbientLight(0x353535));
+    this._scene.add(new AmbientLight(0x353535));
 
     // directional 1
-    let directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    let directionalLight = new DirectionalLight(0xffffff, 1);
     directionalLight.position.set(200, 200, 1000).normalize();
     this._scene.add(directionalLight);
 
     // directional 2
-    let directionalLight2 = new THREE.DirectionalLight(0xffffff, 1);
+    let directionalLight2 = new DirectionalLight(0xffffff, 1);
     directionalLight2.position.set(-200, -200, -1000).normalize();
     this._scene.add(directionalLight2);
   }

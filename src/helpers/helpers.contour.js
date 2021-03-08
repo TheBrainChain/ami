@@ -6,12 +6,10 @@ import ShadersFragment from '../shaders/shaders.contour.fragment';
 /**
  * @module helpers/contour
  */
-const helpersContour = (three = window.THREE) => {
-  if (three === undefined || three.Object3D === undefined) {
-    return null;
-  }
 
-  const Constructor = three.Object3D;
+import {Object3D, Mesh, ShaderMaterial, DoubleSide} from 'three'
+const helpersContour = (three = window.THREE) => {
+  const Constructor = Object3D;
   return class extends Constructor {
     constructor(stack, geometry, texture) {
       //
@@ -34,7 +32,7 @@ const helpersContour = (three = window.THREE) => {
 
     _create() {
       this._prepareMaterial();
-      this._mesh = new three.Mesh(this._geometry, this._material);
+      this._mesh = new Mesh(this._geometry, this._material);
       this._mesh.applyMatrix4(this._stack._ijk2LPS);
       this.add(this._mesh);
     }
@@ -52,8 +50,8 @@ const helpersContour = (three = window.THREE) => {
         // generate material
         let fs = new ShadersFragment(this._uniforms);
         let vs = new ShadersVertex();
-        this._material = new three.ShaderMaterial({
-          side: three.DoubleSide,
+        this._material = new ShaderMaterial({
+          side: DoubleSide,
           uniforms: this._uniforms,
           vertexShader: vs.compute(),
           fragmentShader: fs.compute(),

@@ -4,7 +4,7 @@
 import CamerasOrthographic from '../../cameras/cameras.orthographic';
 import ControlsOrthographic from '../../controls/controls.trackballortho';
 
-import { Vector3 } from 'three/src/math/Vector3';
+import {Vector3, Scene, WebGLRenderer} from 'three'
 
 export default class {
   constructor(containerId = 'r2d', orientation = 'default') {
@@ -61,7 +61,7 @@ export default class {
   _initRenderer(containerId) {
     // renderer
     this._container = document.getElementById(containerId);
-    this._renderer = new THREE.WebGLRenderer({
+    this._renderer = new WebGLRenderer({
       antialias: true,
     });
     this._renderer.setSize(this._container.clientWidth, this._container.clientHeight);
@@ -82,7 +82,7 @@ export default class {
   }
 
   _initScene() {
-    this._scene = new THREE.Scene();
+    this._scene = new Scene();
   }
 
   _initControls() {

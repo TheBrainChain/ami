@@ -3,8 +3,8 @@
  */
 import HelpersStack from '../helpers.stack';
 import LoadersVolume from '../../loaders/loaders.volume';
-
-export default class extends THREE.Object3D {
+import {Object3D} from 'three'
+export default class extends Object3D {
   constructor() {
     super();
 

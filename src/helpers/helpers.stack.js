@@ -25,7 +25,7 @@ import {Object3D, Vector3} from 'three'
  * stackHelper.bbox.color = 0xF9F9F9;
  * stackHelper.border.color = 0xF9F9F9;
  *
- * let scene = new THREE.Scene();
+ * let scene = new Scene();
  * scene.add(stackHelper);
  *
  * @see module:helpers/border

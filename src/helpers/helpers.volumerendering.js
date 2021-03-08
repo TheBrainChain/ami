@@ -115,7 +115,7 @@ const helpersVolumeRendering = () => {
         worldBBox[5] - worldBBox[4]
       );
       this._geometry.applyMatrix4(
-        new three.Matrix4().makeTranslation(centerLPS.x, centerLPS.y, centerLPS.z)
+        new Matrix4().makeTranslation(centerLPS.x, centerLPS.y, centerLPS.z)
       );
     }
 
