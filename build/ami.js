@@ -4444,14 +4444,14 @@ var helpersBoundingBox = function helpersBoundingBox() {
         var halfDimensions = this._stack.halfDimensionsIJK;
         var offset = new three__WEBPACK_IMPORTED_MODULE_0__.Vector3(-0.5, -0.5, -0.5); // Geometry
 
-        var geometry = new three.BoxGeometry(dimensions.x, dimensions.y, dimensions.z);
-        geometry.applyMatrix4(new three.Matrix4().makeTranslation(halfDimensions.x + offset.x, halfDimensions.y + offset.y, halfDimensions.z + offset.z));
+        var geometry = new three__WEBPACK_IMPORTED_MODULE_0__.BoxGeometry(dimensions.x, dimensions.y, dimensions.z);
+        geometry.applyMatrix4(new three__WEBPACK_IMPORTED_MODULE_0__.Matrix4().makeTranslation(halfDimensions.x + offset.x, halfDimensions.y + offset.y, halfDimensions.z + offset.z));
         this._geometry = geometry; // Material
 
         this._material = new three__WEBPACK_IMPORTED_MODULE_0__.MeshBasicMaterial({
           wireframe: true
         });
-        var mesh = new three.Mesh(this._geometry, null);
+        var mesh = new three__WEBPACK_IMPORTED_MODULE_0__.Mesh(this._geometry, null);
         mesh.applyMatrix4(this._stack.ijk2LPS);
         mesh.visible = this._visible;
         this._meshStack = mesh;
