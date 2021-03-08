@@ -429,7 +429,9 @@ export default class ModelsStack extends ModelsBase {
 
     // lps 2 ijk
     this._lps2IJK = new Matrix4();
-    this._lps2IJK.invert(this._ijk2LPS);
+
+    this._lps2IJK.copy(this._ijk2LPS).invert();
+    
   }
 
   /**
@@ -439,7 +441,8 @@ export default class ModelsStack extends ModelsBase {
     this._aabb2LPS = CoreUtils.aabb2LPS(this._xCosine, this._yCosine, this._zCosine, this._origin);
 
     this._lps2AABB = new Matrix4();
-    this._lps2AABB.invert(this._aabb2LPS);
+
+    this._lps2AABB.copy(this._aabb2LPS).invert();
   }
 
   /**

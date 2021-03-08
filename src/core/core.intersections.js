@@ -106,7 +106,8 @@ export default class Intersections {
 
     // invert space matrix
     let fromAABB = new Matrix4();
-    fromAABB.invert(aabb.toAABB);
+
+    fromAABB.copy(aabb.toAABB).invert();
 
     let t1 = plane.direction.clone().applyMatrix4(aabb.toAABB);
     let t0 = new Vector3(0, 0, 0).applyMatrix4(aabb.toAABB);
