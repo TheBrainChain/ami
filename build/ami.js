@@ -70129,12 +70129,6 @@ Matrix3.prototype.applyToVector3Array = function ( /* array, offset, length */ )
 
 };
 
-Matrix3.prototype.getInverse = function ( matrix ) {
-
-	console.warn( 'THREE.Matrix3: .getInverse() has been removed. Use matrixInv.copy( matrix ).invert(); instead.' );
-	return this.copy( matrix ).invert();
-
-};
 
 //
 
@@ -70253,13 +70247,6 @@ Matrix4.prototype.makeFrustum = function ( left, right, bottom, top, near, far )
 
 	console.warn( 'THREE.Matrix4: .makeFrustum() has been removed. Use .makePerspective( left, right, top, bottom, near, far ) instead.' );
 	return this.makePerspective( left, right, top, bottom, near, far );
-
-};
-
-Matrix4.prototype.getInverse = function ( matrix ) {
-
-	console.warn( 'THREE.Matrix4: .getInverse() has been removed. Use matrixInv.copy( matrix ).invert(); instead.' );
-	return this.copy( matrix ).invert();
 
 };
 
@@ -78084,8 +78071,9 @@ module.exports = isString;
 /******/ 	// The require function
 /******/ 	function __webpack_require__(moduleId) {
 /******/ 		// Check if module is in cache
-/******/ 		if(__webpack_module_cache__[moduleId]) {
-/******/ 			return __webpack_module_cache__[moduleId].exports;
+/******/ 		var cachedModule = __webpack_module_cache__[moduleId];
+/******/ 		if (cachedModule !== undefined) {
+/******/ 			return cachedModule.exports;
 /******/ 		}
 /******/ 		// Create a new module (and put it into the cache)
 /******/ 		var module = __webpack_module_cache__[moduleId] = {

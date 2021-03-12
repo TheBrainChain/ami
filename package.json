@@ -1,6 +1,6 @@
 {
   "name": "ami.js",
-  "version": "0.32.0",
+  "version": "0.32.1",
   "main": "build/ami.js",
   "author": {
     "name": "Nicolas Rannou",
@@ -54,16 +54,12 @@
     "build:ami:prod": "cross-env NODE_ENV=production yarn build:ami",
     "build:clean": "rimraf -rf build/*",
     "dev:ami": "webpack --config webpack.config.build.js --hot  --colors",
-    "dist:ami": "yarn build:clean && yarn build:ami && yarn build:ami:prod",
-    "dist:examples": "node ./scripts/buildDist.js && node ./scripts/router.js examples deploy",
-    "dist:clean": "rimraf -rf dist/*",
-    "clean": "yarn build:clean && yarn dist:clean",
-    "ami": "yarn dist:ami && yarn test"
+    "dist:ami": "yarn build:clean && yarn build:ami && yarn build:ami:prod"
   },
   "devDependencies": {
-    "@babel/core": "^7.13.8",
-    "@babel/preset-env": "^7.13.9",
-    "@types/node": "^14.14.31",
+    "@babel/core": "^7.13.10",
+    "@babel/preset-env": "^7.13.10",
+    "@types/node": "^14.14.34",
     "@types/three": "^0.126.0",
     "babel-loader": "^8.2.2",
     "compression-webpack-plugin": "latest",
@@ -79,7 +75,7 @@
     "tslint-loader": "latest",
     "typescript": "latest",
     "uglifyjs-webpack-plugin": "^1.2.7",
-    "webpack": "^5.24.3",
+    "webpack": "^5.25.0",
     "webpack-bundle-analyzer": "latest",
     "webpack-cli": "latest"
   }
